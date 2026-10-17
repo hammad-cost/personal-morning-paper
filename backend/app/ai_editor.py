@@ -194,6 +194,88 @@ def fallback_output(articles: list[dict]) -> EditorOutput:
     )
 
 
+# ---------- single story (Editor Desk swap) ----------
+
+STORY_PROMPT = """Write copy for ONE replacement story in the reader's paper, using only facts in its text.
+Return: article (same id, headline keeping the original meaning, 2-3 sentence summary, 1-sentence why_it_matters
+for this reader), takeaway (one sentence the reader should remember, citing the same article_id), and
+quiz (one question with 3 options, answer_index 0-2, answerable from your summary, citing the same article_id)."""
+
+
+class StoryOutput(BaseModel):
+    article: ArticleCopy
+    takeaway: Takeaway
+    quiz: QuizQuestion
+
+
+def call_llm_story(prompt: str) -> str:
+    """One Gemini call for a single story. Tests replace this."""
+    from google import genai
+    from google.genai import types
+
+    client = genai.Client(api_key=_api_key())
+    response = client.models.generate_content(
+        model=os.getenv("GEMINI_MODEL", DEFAULT_MODEL),
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT + "\n\n" + STORY_PROMPT,
+            response_mime_type="application/json",
+            response_json_schema=StoryOutput.model_json_schema(),
+            temperature=0.4,
+        ),
+    )
+    return response.text or ""
+
+
+def parse_story(raw: str, article_id: str) -> StoryOutput:
+    try:
+        out = StoryOutput.model_validate_json(raw)
+    except ValidationError as exc:
+        raise InvalidOutput(f"schema: {exc.error_count()} errors") from exc
+    if {out.article.id, out.takeaway.article_id, out.quiz.article_id} != {article_id}:
+        raise InvalidOutput("story output cites the wrong article id")
+    if not out.article.summary.strip() or not out.article.headline.strip():
+        raise InvalidOutput("empty headline or summary")
+    return out
+
+
+def fallback_story(article: dict, other_sources: list[str]) -> StoryOutput:
+    others = [s for s in dict.fromkeys(other_sources) if s and s != article["source_name"]][:2]
+    others += ["A wire service", "A local paper"][: 2 - len(others)]
+    return StoryOutput(
+        article=ArticleCopy(
+            id=article["id"],
+            headline=article["headline"],
+            summary=article.get("text") or f"Full story at {article['source_name'] or 'the source'}.",
+            why_it_matters=f"Swapped in because you asked for {article['topic']}.",
+        ),
+        takeaway=Takeaway(text=article["headline"], article_id=article["id"]),
+        quiz=QuizQuestion(
+            question=f"Which outlet reported: “{article['headline']}”?",
+            options=[article["source_name"] or "Unknown source", *others],
+            answer_index=0,
+            article_id=article["id"],
+        ),
+    )
+
+
+def write_story(article: dict, bio: str, topic_weights: dict, other_sources: list[str]) -> tuple[StoryOutput, str]:
+    """Copy for one swapped-in story: (output, "ai" | "fallback"). One call, one retry."""
+    if not ai_available():
+        return fallback_story(article, other_sources), "fallback"
+    prompt = build_prompt([article], bio, topic_weights).replace(
+        "Write today's paper from these articles.", "Write copy for this one story."
+    )
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            return parse_story(call_llm_story(prompt), article["id"]), "ai"
+        except InvalidOutput as exc:
+            log.warning("AI story attempt %d rejected: %s", attempt, exc)
+        except Exception as exc:
+            log.warning("AI story attempt %d failed: %s", attempt, exc)
+    return fallback_story(article, other_sources), "fallback"
+
+
 # ---------- entry point ----------
 
 def write_edition(articles: list[dict], bio: str, topic_weights: dict) -> tuple[EditorOutput, str]:

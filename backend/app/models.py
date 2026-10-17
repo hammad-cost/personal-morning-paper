@@ -46,6 +46,11 @@ class SignalRequest(BaseModel):
     note: str = Field(default="", max_length=200)  # COPILOT: the reader's words
 
 
+class SwapRequest(BaseModel):
+    article_id: str
+    topic: str = Field(min_length=1, max_length=60)
+
+
 class StateResponse(BaseModel):
     onboarded: bool
     profile: UserProfile

@@ -57,6 +57,7 @@ function StoryCard({ article, weight, lead = false, skipState, onSkip, onUndo, o
     >
       <p className="font-meta text-[11px] uppercase tracking-widest text-ink-muted">
         {article.is_explore && <span className="mr-2 bg-accent px-1.5 py-0.5 text-paper">{article.label || 'Something new'}</span>}
+        {article.swapped && <span className="mr-2 border border-ink px-1.5 py-0.5 text-ink">Editor&apos;s swap</span>}
         <span className={lead ? 'text-accent' : ''}>{article.topic}</span>
         <span aria-hidden="true"> · </span>
         <span>{article.source_name}</span>

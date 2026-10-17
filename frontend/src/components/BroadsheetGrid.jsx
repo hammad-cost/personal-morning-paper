@@ -15,6 +15,12 @@ export function groupBySection(articles, sections) {
   }
 }
 
+// Stories in the order a reader meets them: lead first, then each section. Used to number them.
+export function readingOrder(articles, sections) {
+  const { lead, sections: grouped } = groupBySection(articles, sections)
+  return lead ? [lead, ...grouped.flatMap((s) => s.articles)] : []
+}
+
 // Vertical rule after a card only when another card sits to its right (2 columns md, 3 lg).
 export function columnRule(index, count) {
   const isLast = index === count - 1

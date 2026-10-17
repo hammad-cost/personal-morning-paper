@@ -37,3 +37,9 @@ export const sendSignal = (signal) =>
   request('/signal', { method: 'POST', body: JSON.stringify(signal), keepalive: true })
 
 export const getBrain = () => request('/brain')
+
+export const swapStory = (editionId, articleId, topic) =>
+  request(`/edition/${encodeURIComponent(editionId)}/swap`, {
+    method: 'POST',
+    body: JSON.stringify({ article_id: articleId, topic }),
+  })

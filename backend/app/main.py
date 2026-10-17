@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from app import editions, gatherer, learning, ranker, store  # noqa: E402  (env must load first)
-from app.models import OnboardRequest, SignalRequest, StateResponse, UserProfile  # noqa: E402
+from app.models import OnboardRequest, SignalRequest, StateResponse, SwapRequest, UserProfile  # noqa: E402
 
 app = FastAPI(title="The Personal Morning Paper")
 
@@ -63,6 +63,17 @@ def edition_today():
         raise HTTPException(status_code=409, detail="Reader is not onboarded yet.")
     try:
         return editions.get_or_create_today()
+    except editions.GenerationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/edition/{edition_id}/swap")
+def swap(edition_id: str, body: SwapRequest):
+    """Editor Desk: replace one story with a fresh one on a requested topic."""
+    try:
+        return editions.swap_story(edition_id, body.article_id, body.topic)
+    except editions.SwapError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except editions.GenerationError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

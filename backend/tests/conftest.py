@@ -22,6 +22,7 @@ def no_network(monkeypatch):
         raise AssertionError("real network call attempted in a test")
 
     monkeypatch.setattr(ai_editor, "call_llm", blocked)
+    monkeypatch.setattr(ai_editor, "call_llm_story", blocked)
     monkeypatch.setattr(gatherer.httpx, "get", blocked)
     gatherer.clear_cache()
     editions.reset_status()

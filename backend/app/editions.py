@@ -141,6 +141,96 @@ def _generate_and_save() -> dict:
     return edition
 
 
+class SwapError(LookupError):
+    pass
+
+
+def _find(data: dict, edition_id: str, article_id: str) -> tuple[dict, dict]:
+    edition = next((e for e in data["editions"] if e["id"] == edition_id), None)
+    if not edition:
+        raise SwapError(f"edition {edition_id} not found")
+    article = next((a for a in edition["articles"] if a["id"] == article_id), None)
+    if not article:
+        raise SwapError(f"article {article_id} not found in {edition_id}")
+    return edition, article
+
+
+def _resection(edition: dict, weights: dict) -> list[str]:
+    """Keep the existing section order; drop empty ones and append new topics by weight."""
+    topics = {a["topic"] for a in edition["articles"]}
+    kept = [s for s in edition["sections"] if s in topics]
+    new = sorted(topics - set(kept), key=lambda t: -weights.get(t, 0))
+    return kept + new
+
+
+def swap_story(edition_id: str, article_id: str, topic: str) -> dict:
+    """Replace one story with a fresh one on `topic`; every other story stays as it was."""
+    topic = topic.strip()
+    if not topic:
+        raise SwapError("a topic is needed to swap a story")
+    data = store.load()
+    edition, old = _find(data, edition_id, article_id)
+    user = data["user"]
+    weights = user["topic_weights"]
+    # Match a known topic case-insensitively; a new one is title-cased for its section header
+    # ("climate tech" -> "Climate Tech", acronyms like "AI" kept) and ranked at a neutral weight.
+    known = next((t for t in weights if t.lower() == topic.lower()), None)
+    topic = known or " ".join(w if w.isupper() else w[:1].upper() + w[1:] for w in topic.split())
+
+    candidates = [
+        a for a in gatherer.gather({topic: max(weights.get(topic, 0), 5)}) if a["topic"].lower() == topic.lower()
+    ]
+    used = seen_urls(data)
+    fresh = [a for a in candidates if a["url"] not in used]
+    scored = ranker.score_all(fresh, {topic: max(weights.get(topic, 0), 5)}, user["source_weights"])
+    if not scored:
+        raise GenerationError(f"No fresh story found on {topic} right now.")
+    pick = {**scored[0], "id": old["id"]}
+
+    others = [a["source_name"] for a in edition["articles"] if a["id"] != old["id"]]
+    out, writer = ai_editor.write_story(pick, user["bio"], weights, others)
+
+    def apply(d: dict) -> None:
+        ed, current = _find(d, edition_id, article_id)
+        current.clear()
+        current.update({
+            "id": old["id"],
+            "topic": topic,
+            "headline": out.article.headline,
+            "original_headline": pick["headline"],
+            "summary": out.article.summary,
+            "why_it_matters": out.article.why_it_matters,
+            "source_name": pick["source_name"],
+            "url": pick["url"],
+            "published_at": pick["published_at"],
+            "score": pick["score"],
+            "is_lead": old.get("is_lead", False),
+            "is_explore": False,
+            "label": None,
+            "skipped": False,
+            "clicked": False,
+            "swapped": True,
+            "writer": writer,
+        })
+        # Takeaways and quiz questions about the old story now describe the new one.
+        ed["three_takeaways"] = [
+            out.takeaway.model_dump() if t["article_id"] == article_id else t for t in ed["three_takeaways"]
+        ]
+        ed["recall_quiz"] = [
+            out.quiz.model_dump() if q["article_id"] == article_id else q for q in ed["recall_quiz"]
+        ]
+        dots = ed.get("connect_the_dots") or {}
+        if article_id in dots.get("article_ids", []):
+            dots["article_ids"] = [i for i in dots["article_ids"] if i != article_id]
+        ed["sections"] = _resection(ed, d["user"]["topic_weights"])
+        ed["reading_minutes"] = reading_minutes(ed)
+        result["edition"] = ed
+
+    result: dict = {}
+    store.update(apply)
+    return result["edition"]
+
+
 def get_or_create_today() -> dict:
     """Return today's edition, generating it once if it does not exist yet."""
     existing = find_today(store.load())

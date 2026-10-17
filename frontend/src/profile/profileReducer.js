@@ -8,6 +8,7 @@ export const MAX_WEIGHT = 25
 export const initialProfile = {
   name: '',
   paper_title: '',
+  title_custom: false, // true once the reader picks or types their own paper name
   bio: '',
   topics: {}, // { "AI Agents": 10, "Celebrity Gossip": -10 }
 }
@@ -15,6 +16,13 @@ export const initialProfile = {
 export const clampWeight = (w) => Math.max(MIN_WEIGHT, Math.min(MAX_WEIGHT, Math.round(w)))
 
 export const paperTitleFor = (name) => (name.trim() ? `THE ${name.trim().toUpperCase()} CHRONICLE` : '')
+
+// Ready-made paper names offered at onboarding; the reader can also type their own.
+export const paperTitleSuggestions = (name) => {
+  const n = name.trim().toUpperCase()
+  if (!n) return []
+  return [`THE ${n} CHRONICLE`, `THE ${n} TIMES`, `THE ${n} DAILY`, `${n}'S MORNING EDITION`]
+}
 
 const tidy = (topic) => topic.trim().replace(/\s+/g, ' ')
 
@@ -33,9 +41,13 @@ export function profileReducer(state, action) {
   switch (action.type) {
     // Text is kept as typed (inputs need spaces mid-word); toOnboardPayload trims.
     case 'SET_NAME':
-      return { ...state, name: action.name, paper_title: paperTitleFor(action.name) }
+      // The paper name follows the reader's name until they choose their own.
+      return { ...state, name: action.name, paper_title: state.title_custom ? state.paper_title : paperTitleFor(action.name) }
     case 'SET_PAPER_TITLE':
-      return { ...state, paper_title: action.title }
+      // Clearing the field hands the name back to the automatic one.
+      return action.title.trim()
+        ? { ...state, paper_title: action.title, title_custom: true }
+        : { ...state, paper_title: paperTitleFor(state.name), title_custom: false }
     case 'SET_BIO':
       return { ...state, bio: action.bio }
     case 'ADD_TOPICS': {

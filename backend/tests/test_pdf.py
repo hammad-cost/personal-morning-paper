@@ -53,6 +53,7 @@ def test_builds_a_pdf_with_masthead_edition_number_and_takeaways():
     assert "3 THINGS YOU LEARNED TODAY" in text
     assert "Takeaway 1" in text and "&" in text  # markup characters are escaped, not dropped
     assert "Connect the Dots" in text and "Read slowly" in text
+    assert "Printed by Vale" in " ".join(text.split())  # the footer may wrap
 
 
 def test_skipped_stories_are_left_out():

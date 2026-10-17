@@ -9,9 +9,9 @@ const setup = () => {
 }
 
 describe('interview tools', () => {
-  it('defines the five blueprint actions with schemas', () => {
+  it('defines the blueprint actions plus setPaperTitle, with schemas', () => {
     const { tools } = setup()
-    expect(Object.keys(tools)).toEqual(['setReaderName', 'addTopics', 'blockTopics', 'setBio', 'finishOnboarding'])
+    expect(Object.keys(tools)).toEqual(['setReaderName', 'setPaperTitle', 'addTopics', 'blockTopics', 'setBio', 'finishOnboarding'])
     for (const tool of Object.values(tools)) {
       expect(tool.description).toBeTruthy()
       expect(tool.parameters['~standard']).toBeDefined()
@@ -29,6 +29,9 @@ describe('interview tools', () => {
 
     await tools.blockTopics.handler({ topics: ['Celebrity Gossip'] })
     expect(dispatch).toHaveBeenLastCalledWith({ type: 'BLOCK_TOPICS', topics: ['Celebrity Gossip'] })
+
+    await tools.setPaperTitle.handler({ title: 'The Iqra Times' })
+    expect(dispatch).toHaveBeenLastCalledWith({ type: 'SET_PAPER_TITLE', title: 'The Iqra Times' })
 
     await tools.setBio.handler({ bio: 'CS student' })
     expect(dispatch).toHaveBeenLastCalledWith({ type: 'SET_BIO', bio: 'CS student' })

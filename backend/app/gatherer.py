@@ -32,7 +32,7 @@ MAX_TEXT = 600
 CACHE_TTL = 30 * 60
 HEADLINE_SIMILARITY = 0.85
 TIMEOUT = 8.0
-USER_AGENT = "Mozilla/5.0 (compatible; PersonalMorningPaper/0.1)"
+USER_AGENT = "Mozilla/5.0 (compatible; Vale/0.2)"
 
 _cache: dict[str, tuple[float, bytes]] = {}
 

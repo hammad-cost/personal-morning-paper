@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { getGenerationStatus, getTodayEdition } from '../api'
+import { BRAND } from '../brand'
 
 // Loading screen while today's edition is made. Shows the backend's real step.
 
@@ -48,7 +49,7 @@ function PrintingPress({ onReady, load = getTodayEdition, title = 'Your paper is
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4">
-      <p className="text-center font-meta text-xs uppercase tracking-widest text-ink-muted">The Printing Press</p>
+      <p className="text-center font-meta text-xs uppercase tracking-widest text-ink-muted">{BRAND} · The Printing Press</p>
       <h1 className="mt-2 border-y-4 border-double border-ink py-4 text-center font-headline text-3xl font-black">
         {title}
       </h1>

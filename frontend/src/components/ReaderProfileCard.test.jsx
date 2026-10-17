@@ -10,6 +10,20 @@ const profile = {
 }
 
 describe('ReaderProfileCard', () => {
+  it('lets the reader name their paper by typing or picking an idea', async () => {
+    const dispatch = vi.fn()
+    const user = userEvent.setup()
+    render(<ReaderProfileCard profile={{ ...profile, name: 'Iqra', paper_title: 'THE IQRA CHRONICLE' }} dispatch={dispatch} />)
+
+    await user.click(screen.getByRole('button', { name: 'THE IQRA TIMES' }))
+    expect(dispatch).toHaveBeenLastCalledWith({ type: 'SET_PAPER_TITLE', title: 'THE IQRA TIMES' })
+
+    const field = screen.getByLabelText('Name your paper')
+    await user.clear(field)
+    await user.type(field, 'The Morning Iqra{Enter}')
+    expect(dispatch).toHaveBeenLastCalledWith({ type: 'SET_PAPER_TITLE', title: 'The Morning Iqra' })
+  })
+
   it('renders masthead, pills and weights', () => {
     render(<ReaderProfileCard profile={profile} dispatch={() => {}} />)
     expect(screen.getByRole('heading', { name: 'THE AYESHA CHRONICLE' })).toBeInTheDocument()

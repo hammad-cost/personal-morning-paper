@@ -1,6 +1,7 @@
 import { MessagesSquare, ListChecks } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 import { hasCopilot } from '../copilot/config'
+import { BRAND, TAGLINE } from '../brand'
 import QuickSetup from './QuickSetup'
 
 // CopilotKit is large; load the Editor chat only when the reader picks it.
@@ -10,11 +11,12 @@ function Welcome({ onPick }) {
   const copilotReady = hasCopilot()
   return (
     <main className="mx-auto flex min-h-screen max-w-2xl flex-col items-center justify-center px-4 text-center">
-      <p className="font-meta text-xs uppercase tracking-widest text-ink-muted">The Personal Morning Paper</p>
+      <p className="font-headline text-3xl font-black tracking-tight">{BRAND}</p>
+      <p className="font-meta text-xs uppercase tracking-widest text-ink-muted">{TAGLINE}</p>
       <h1 className="mt-4 border-y-4 border-double border-ink py-6 font-headline text-4xl font-black sm:text-5xl">
         Every great paper starts with its reader.
       </h1>
-      <p className="mt-6 text-ink-muted">One calm, finite paper a day, edited for you. It takes about a minute to set up.</p>
+      <p className="mt-6 text-ink-muted">Tell us who you are and what you care about. We will name your paper after you and print it fresh every morning. It takes about a minute.</p>
       <div className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
         <button
           type="button"

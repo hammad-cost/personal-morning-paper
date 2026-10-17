@@ -9,7 +9,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 from app import editions, gatherer, learning, pdf, ranker, store  # noqa: E402  (env must load first)
 from app.models import OnboardRequest, SignalRequest, StateResponse, SwapRequest, UserProfile  # noqa: E402
 
-app = FastAPI(title="The Personal Morning Paper")
+app = FastAPI(title="Vale")
 
 
 def _state(data: dict) -> StateResponse:

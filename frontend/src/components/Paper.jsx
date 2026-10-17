@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { pdfUrl, sendSignal, swapStory } from '../api'
+import { BRAND } from '../brand'
 import { hasCopilot } from '../copilot/config'
 import ArchiveDrawer from './ArchiveDrawer'
 import BrainPanel from './BrainPanel'
@@ -199,6 +200,11 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition }) {
           <RecallCheck quiz={paper.recall_quiz} articles={articles} onAnswer={answerQuiz} />
         </CaughtUp>
       </main>
+
+      <footer className="mt-6 text-center font-meta text-[11px] uppercase tracking-widest text-ink-muted">
+        {profile.name ? `Printed for ${profile.name} by ` : 'Printed by '}
+        <span className="font-headline text-sm font-black normal-case tracking-normal text-ink">{BRAND}</span>
+      </footer>
 
       <BrainPanel open={brainOpen} onClose={closeBrain} refreshKey={brainVersion} />
       {onOpenEdition && (

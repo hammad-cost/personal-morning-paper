@@ -15,6 +15,7 @@ describe('Onboarding', () => {
     const user = userEvent.setup()
     render(<Onboarding onOnboarded={() => {}} />)
     expect(screen.getByText(/every great paper starts with its reader/i)).toBeInTheDocument()
+    expect(screen.getByText('Vale')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /talk to the editor/i }))
     expect(await screen.findByText('Editor interview')).toBeInTheDocument()
   })

@@ -28,6 +28,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
+BRAND = "Vale"
 PAGE_W, PAGE_H = A4
 MARGIN = 36
 GUTTER = 14
@@ -105,7 +106,7 @@ def _column_rules(c, top, bottom=MARGIN + 14):
 def _footer(c, doc, meta):
     c.setFont("Helvetica", 6.5)
     c.setFillColor(MUTED)
-    c.drawCentredString(PAGE_W / 2, MARGIN - 6, f"{meta['title']}  ·  Edition No. {meta['number']}  ·  page {doc.page}")
+    c.drawCentredString(PAGE_W / 2, MARGIN - 6, f"{meta['title']}  ·  Edition No. {meta['number']}  ·  page {doc.page}  ·  printed by {BRAND}")
 
 
 def _first_page(c, doc, meta):
@@ -229,7 +230,7 @@ def build_pdf(edition: dict, paper_title: str, compress: bool = True) -> bytes:
     urls = {a["id"]: a.get("url", "") for a in edition["articles"]}
     minutes = edition.get("reading_minutes")
     meta = {
-        "title": (paper_title or "The Personal Morning Paper").upper(),
+        "title": (paper_title or BRAND).upper(),
         "number": edition.get("edition_number"),
         "line": "  ·  ".join(filter(None, [
             "Vol. 1",
@@ -242,7 +243,7 @@ def build_pdf(edition: dict, paper_title: str, compress: bool = True) -> bytes:
     buf = BytesIO()
     doc = BaseDocTemplate(
         buf, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN, topMargin=MARGIN, bottomMargin=MARGIN,
-        title=f"{meta['title']} — Edition No. {meta['number']}", author="The Personal Morning Paper",
+        title=f"{meta['title']} — Edition No. {meta['number']}", author=BRAND,
         pageCompression=1 if compress else 0,
     )
 
@@ -271,7 +272,7 @@ def build_pdf(edition: dict, paper_title: str, compress: bool = True) -> bytes:
             current_section = header = a["topic"]
         flow.append(_story(a, lead=(i == 0), section=header))
     flow += _side_boxes(edition)
-    flow.append(Paragraph("Every headline links to the original article. Printed by The Personal Morning Paper.", STYLES["footer"]))
+    flow.append(Paragraph(f"Every headline links to the original article. Printed by {BRAND}.", STYLES["footer"]))
 
     doc.build(flow)
     return buf.getvalue()

@@ -1,6 +1,6 @@
 import { Minus, Plus, X } from 'lucide-react'
-import { useState } from 'react'
-import { isBlocked } from '../profile/profileReducer'
+import { useEffect, useState } from 'react'
+import { isBlocked, paperTitleSuggestions } from '../profile/profileReducer'
 
 // Live profile card: masthead, bio and editable topic pills.
 // Used beside the Editor chat and inside Quick setup.
@@ -46,6 +46,59 @@ function TopicPill({ topic, weight, dispatch }) {
   )
 }
 
+// "Name your paper": type a name or pick a suggestion. The draft is local so the field can be
+// cleared and retyped; it is committed on Enter or when the field loses focus.
+function PaperName({ profile, dispatch }) {
+  const [draft, setDraft] = useState(profile.paper_title)
+  const [editing, setEditing] = useState(false)
+  useEffect(() => {
+    if (!editing) setDraft(profile.paper_title)
+  }, [profile.paper_title, editing])
+
+  const commit = () => {
+    setEditing(false)
+    dispatch({ type: 'SET_PAPER_TITLE', title: draft })
+  }
+
+  return (
+    <div className="mt-5">
+      <label htmlFor="paper-name" className="font-meta text-xs uppercase tracking-widest text-ink-muted">
+        Name your paper
+      </label>
+      <input
+        id="paper-name"
+        value={draft}
+        onFocus={() => setEditing(true)}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            e.currentTarget.blur()
+          }
+        }}
+        maxLength={60}
+        className="mt-1 w-full border border-rule bg-paper px-3 py-1.5 font-headline text-sm font-bold uppercase"
+      />
+      <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Paper name ideas">
+        {paperTitleSuggestions(profile.name).map((title) => (
+          <button
+            key={title}
+            type="button"
+            aria-pressed={profile.paper_title === title}
+            onClick={() => dispatch({ type: 'SET_PAPER_TITLE', title })}
+            className={`border px-2 py-0.5 font-meta text-[11px] ${
+              profile.paper_title === title ? 'border-ink bg-ink text-paper' : 'border-rule hover:border-ink'
+            }`}
+          >
+            {title}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ReaderProfileCard({ profile, dispatch }) {
   const [newTopic, setNewTopic] = useState('')
   const entries = Object.entries(profile.topics).sort((a, b) => b[1] - a[1])
@@ -69,6 +122,8 @@ function ReaderProfileCard({ profile, dispatch }) {
         {profile.name ? `Edited for ${profile.name}` : 'Who is this paper for?'}
         {profile.bio && <> · {profile.bio}</>}
       </p>
+
+      {profile.name.trim() && <PaperName profile={profile} dispatch={dispatch} />}
 
       <h3 className="mt-6 font-meta text-xs uppercase tracking-widest text-ink-muted">Interests</h3>
       {interests.length ? (

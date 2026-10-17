@@ -1,4 +1,4 @@
-import { initialProfile, isReady, profileReducer, toOnboardPayload } from './profileReducer'
+import { initialProfile, isReady, paperTitleSuggestions, profileReducer, toOnboardPayload } from './profileReducer'
 
 const run = (...actions) => actions.reduce(profileReducer, initialProfile)
 
@@ -17,6 +17,22 @@ describe('profileReducer', () => {
     )
     expect(p.bio).toBe('CS student ')
     expect(toOnboardPayload(p)).toMatchObject({ name: 'Mary Ann', paper_title: 'THE MARY ANN CHRONICLE', bio: 'CS student' })
+  })
+
+  it('a chosen paper name sticks when the reader name changes; clearing it goes back to automatic', () => {
+    let p = run({ type: 'SET_NAME', name: 'Iqra' }, { type: 'SET_PAPER_TITLE', title: 'The Iqra Times' })
+    expect(p.paper_title).toBe('The Iqra Times')
+    p = profileReducer(p, { type: 'SET_NAME', name: 'Iqra Khan' })
+    expect(p.paper_title).toBe('The Iqra Times')
+    p = profileReducer(p, { type: 'SET_PAPER_TITLE', title: '  ' })
+    expect(p.paper_title).toBe('THE IQRA KHAN CHRONICLE')
+    expect(p.title_custom).toBe(false)
+    expect(toOnboardPayload(profileReducer(p, { type: 'SET_PAPER_TITLE', title: 'Morning Iqra ' })).paper_title).toBe('Morning Iqra')
+  })
+
+  it('offers paper name ideas built from the reader name', () => {
+    expect(paperTitleSuggestions('Iqra')).toEqual(['THE IQRA CHRONICLE', 'THE IQRA TIMES', 'THE IQRA DAILY', "IQRA'S MORNING EDITION"])
+    expect(paperTitleSuggestions('  ')).toEqual([])
   })
 
   it('ADD_TOPICS uses 10 for core and 5 for casual', () => {

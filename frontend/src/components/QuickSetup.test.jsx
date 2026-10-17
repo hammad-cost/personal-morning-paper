@@ -33,6 +33,17 @@ describe('QuickSetup', () => {
     expect(onDone).toHaveBeenCalledWith(state)
   })
 
+  it('sends the paper name the reader picked', async () => {
+    onboard.mockResolvedValue({ onboarded: true })
+    const user = userEvent.setup()
+    render(<QuickSetup onDone={() => {}} />)
+    await user.type(screen.getByLabelText(/your name/i), 'Iqra')
+    await user.click(screen.getByRole('button', { name: 'Space' }))
+    await user.click(screen.getByRole('button', { name: 'THE IQRA DAILY' }))
+    await user.click(screen.getByRole('button', { name: /print my first edition/i }))
+    expect(onboard).toHaveBeenCalledWith(expect.objectContaining({ name: 'Iqra', paper_title: 'THE IQRA DAILY' }))
+  })
+
   it('shows an error if saving fails', async () => {
     onboard.mockRejectedValue(new Error('down'))
     const user = userEvent.setup()

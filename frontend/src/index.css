@@ -18,10 +18,40 @@
   --color-ink-muted: var(--ink-muted);
   --color-rule: var(--rule);
   --color-accent: var(--accent);
+}
 
+/* Plain @theme (not inline) so the font variables also exist at runtime for var(). */
+@theme {
   --font-headline: "Playfair Display", Georgia, "Times New Roman", serif;
   --font-body: "Inter", system-ui, sans-serif;
   --font-meta: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* Re-skin the CopilotKit v2 chat as a broadsheet: paper, ink, square corners. */
+[data-copilotkit] {
+  --background: var(--bg-card);
+  --foreground: var(--ink);
+  --card: var(--bg-card);
+  --card-foreground: var(--ink);
+  --popover: var(--bg-card);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: var(--bg-paper);
+  --secondary: var(--bg-paper);
+  --secondary-foreground: var(--ink);
+  --muted: var(--bg-paper);
+  --muted-foreground: var(--ink-muted);
+  --accent: var(--bg-paper);
+  --accent-foreground: var(--ink);
+  --border: var(--rule);
+  --input: var(--rule);
+  --ring: var(--accent);
+  --radius: 0;
+  --cpk-default-font-family: var(--font-body);
+}
+
+.editor-chat [data-copilotkit] {
+  height: 100%;
 }
 
 @layer base {

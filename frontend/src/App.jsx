@@ -29,7 +29,8 @@ function App() {
     )
   }
 
-  return state.onboarded ? <Paper profile={state.profile} /> : <Onboarding />
+  // Step 4 puts the Printing Press between onboarding and the paper.
+  return state.onboarded ? <Paper profile={state.profile} /> : <Onboarding onOnboarded={setState} />
 }
 
 export default App

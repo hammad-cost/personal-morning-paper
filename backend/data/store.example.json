@@ -1,0 +1,13 @@
+{
+  "user": {
+    "onboarded": false,
+    "name": "",
+    "paper_title": "",
+    "bio": "",
+    "topic_weights": {},
+    "source_weights": {},
+    "created_at": null
+  },
+  "editions": [],
+  "signals": []
+}

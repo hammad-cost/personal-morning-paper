@@ -1,1 +1,39 @@
 @import "tailwindcss";
+
+/* Design tokens from BLUEPRINT.md "Design system". */
+:root {
+  --bg-paper: #faf7f2;
+  --bg-card: #fffdf9;
+  --ink: #1a1917;
+  --ink-muted: #5c5852;
+  --rule: #d6d1c7;
+  --accent: #b93829;
+}
+
+/* Expose the tokens as Tailwind utilities: bg-paper, text-ink, border-rule, font-headline... */
+@theme inline {
+  --color-paper: var(--bg-paper);
+  --color-card: var(--bg-card);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+
+  --font-headline: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-meta: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  body {
+    background: var(--bg-paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    line-height: 1.6;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}

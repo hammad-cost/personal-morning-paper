@@ -1,25 +1,24 @@
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
+from pathlib import Path
 
-from fastapi import FastAPI
+from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
 
-from app import gatherer, ranker, store
-from app.models import OnboardRequest, StateResponse, UserProfile
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+from app import editions, gatherer, ranker, store  # noqa: E402  (env must load first)
+from app.models import OnboardRequest, StateResponse, UserProfile  # noqa: E402
 
 app = FastAPI(title="The Personal Morning Paper")
 
 
-def _today_edition_id(data: dict) -> str | None:
-    today = date.today().isoformat()
-    todays = [e for e in data["editions"] if e.get("date") == today]
-    return todays[-1]["id"] if todays else None
-
-
 def _state(data: dict) -> StateResponse:
     profile = UserProfile(**data["user"])
+    today = editions.find_today(data)
     return StateResponse(
         onboarded=profile.onboarded,
         profile=profile,
-        today_edition_id=_today_edition_id(data),
+        today_edition_id=today["id"] if today else None,
     )
 
 
@@ -53,7 +52,25 @@ def onboard(body: OnboardRequest):
 @app.post("/api/reset", response_model=StateResponse)
 def reset():
     """Dev only: clear the store for a fresh demo."""
+    editions.reset_status()
     return _state(store.reset())
+
+
+@app.get("/api/edition/today")
+def edition_today():
+    """Today's edition, generated on first request of the day."""
+    if not store.load()["user"]["onboarded"]:
+        raise HTTPException(status_code=409, detail="Reader is not onboarded yet.")
+    try:
+        return editions.get_or_create_today()
+    except editions.GenerationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/generation/status")
+def generation_status():
+    """Printing Press step for the loading screen."""
+    return editions.get_status()
 
 
 @app.get("/api/debug/candidates")
@@ -62,11 +79,10 @@ def debug_candidates(limit: int = 50):
     data = store.load()
     user = data["user"]
     weights = user["topic_weights"]
-    seen_urls = {a["url"] for e in data["editions"] for a in e.get("articles", [])}
 
     candidates = gatherer.gather(weights)
-    paper = ranker.rank(candidates, weights, user["source_weights"], seen_urls)
-    scored = ranker.score_all(candidates, weights, user["source_weights"], seen_urls)
+    paper = ranker.rank(candidates, weights, user["source_weights"], editions.seen_urls(data))
+    scored = ranker.score_all(candidates, weights, user["source_weights"], editions.seen_urls(data))
     return {
         "topics_queried": gatherer.topics_to_query(weights),
         "blocked_topics": [t for t, w in weights.items() if w < 0],

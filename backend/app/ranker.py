@@ -91,22 +91,29 @@ def rank(candidates, topic_weights, source_weights=None, seen_urls=None, now=Non
     picked: list[dict] = []
     per_topic: dict[str, int] = {}
     per_source: dict[tuple[str, str], int] = {}
-    for article in scored:
-        if len(picked) == size - 1:
-            break
-        source_key = (article["topic"], article["source_name"])
-        if per_topic.get(article["topic"], 0) >= max_per_topic:
-            continue
-        if per_source.get(source_key, 0) >= MAX_PER_SOURCE_PER_TOPIC:
-            continue
-        picked.append({**article, "is_lead": False, "is_explore": False})
-        per_topic[article["topic"]] = per_topic.get(article["topic"], 0) + 1
-        per_source[source_key] = per_source.get(source_key, 0) + 1
 
+    def fill(limit: int) -> None:
+        """Add the best remaining stories that respect the per-topic and per-source caps."""
+        taken = {a["id"] for a in picked}
+        for article in scored:
+            if len(picked) >= limit:
+                return
+            source_key = (article["topic"], article["source_name"])
+            if article["id"] in taken or per_topic.get(article["topic"], 0) >= max_per_topic:
+                continue
+            if per_source.get(source_key, 0) >= MAX_PER_SOURCE_PER_TOPIC:
+                continue
+            picked.append({**article, "is_lead": False, "is_explore": False})
+            per_topic[article["topic"]] = per_topic.get(article["topic"], 0) + 1
+            per_source[source_key] = per_source.get(source_key, 0) + 1
+
+    fill(size - 1)
     explore = _pick_explore(scored, picked, topic_weights)
     if explore:
         picked.append({**explore, "is_lead": False, "is_explore": True, "label": EXPLORE_LABEL})
-    elif len(picked) > 1:
+    else:
+        fill(size)  # no new topic left: use the spare slot for the next best story
+    if not explore and len(picked) > 1:
         # Few candidates: every story is already in. Label the weakest low-weight one as the explore pick.
         low = [a for a in picked[1:] if topic_weights.get(a["topic"], 0) <= EXPLORE_MAX_WEIGHT]
         if low:

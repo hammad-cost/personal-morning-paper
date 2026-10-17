@@ -1,4 +1,4 @@
-import { getState, onboard, resetStore } from './api'
+import { getGenerationStatus, getState, getTodayEdition, onboard, resetStore } from './api'
 
 describe('api', () => {
   beforeEach(() => {
@@ -26,5 +26,16 @@ describe('api', () => {
   it('throws on a non-OK response', async () => {
     fetch.mockResolvedValue({ ok: false, status: 500 })
     await expect(getState()).rejects.toThrow(/500/)
+  })
+
+  it("uses FastAPI's detail message when there is one", async () => {
+    fetch.mockResolvedValue({ ok: false, status: 503, json: () => Promise.resolve({ detail: 'Not enough fresh news' }) })
+    await expect(getTodayEdition()).rejects.toThrow('Not enough fresh news')
+  })
+
+  it('edition calls hit the right endpoints', async () => {
+    await getTodayEdition()
+    await getGenerationStatus()
+    expect(fetch.mock.calls.map((c) => c[0])).toEqual(['/api/edition/today', '/api/generation/status'])
   })
 })

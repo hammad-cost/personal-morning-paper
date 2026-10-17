@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { getState } from './api'
 import Onboarding from './components/Onboarding'
 import Paper from './components/Paper'
+import PrintingPress from './components/PrintingPress'
 
 function App() {
   const [state, setState] = useState(null)
+  const [edition, setEdition] = useState(null)
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -29,8 +31,10 @@ function App() {
     )
   }
 
-  // Step 4 puts the Printing Press between onboarding and the paper.
-  return state.onboarded ? <Paper profile={state.profile} /> : <Onboarding onOnboarded={setState} />
+  if (!state.onboarded) return <Onboarding onOnboarded={setState} />
+  // Today's edition loads instantly if it exists; otherwise the press makes it once.
+  if (!edition) return <PrintingPress onReady={setEdition} />
+  return <Paper profile={state.profile} edition={edition} />
 }
 
 export default App

@@ -99,6 +99,18 @@ def test_one_story_per_source_in_each_section():
     assert "a1" in {a["id"] for a in paper["articles"]}
 
 
+def test_spare_slot_is_filled_when_no_new_topic_is_left():
+    # Top 9 = AI x3, Cyber x3, Space x2, Biology x1: every topic is already in, so no explore pick.
+    counts = {"AI Agents": 4, "Cybersecurity": 4, "Space": 2, "Biology": 2}
+    candidates = [art(f"{t[:2]}{i}", t, hours_ago=i) for t, n in counts.items() for i in range(n)]
+    weights = {**WEIGHTS, "Biology": 1}
+    paper = ranker.rank(candidates, weights, now=NOW)
+    assert len(paper["articles"]) == 10
+    assert sorted(a["id"] for a in paper["articles"] if a["topic"] == "Biology") == ["Bi0", "Bi1"]
+    explore = [a for a in paper["articles"] if a["is_explore"]]
+    assert len(explore) == 1 and explore[0]["topic"] == "Biology"  # weakest low-weight topic labelled
+
+
 def test_seen_urls_push_stories_down():
     candidates = [art("old", "AI Agents", hours_ago=1), art("new", "AI Agents", hours_ago=20)]
     paper = ranker.rank(candidates, WEIGHTS, seen_urls={"https://news.test/old"}, now=NOW)

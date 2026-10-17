@@ -7,7 +7,16 @@ async function request(path, options = {}) {
     ...options,
   })
   if (!response.ok) {
-    throw new Error(`${options.method ?? 'GET'} /api${path} failed: ${response.status}`)
+    // FastAPI errors carry a human-readable "detail"; fall back to the status code.
+    let detail = null
+    try {
+      detail = (await response.json()).detail
+    } catch {
+      // no JSON body
+    }
+    throw new Error(
+      typeof detail === 'string' ? detail : `${options.method ?? 'GET'} /api${path} failed: ${response.status}`,
+    )
   }
   return response.json()
 }
@@ -18,3 +27,7 @@ export const onboard = (profile) =>
   request('/onboard', { method: 'POST', body: JSON.stringify(profile) })
 
 export const resetStore = () => request('/reset', { method: 'POST' })
+
+export const getTodayEdition = () => request('/edition/today')
+
+export const getGenerationStatus = () => request('/generation/status')

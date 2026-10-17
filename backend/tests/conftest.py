@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app import store
+from app import ai_editor, editions, gatherer, store
 from app.main import app
 
 
@@ -11,6 +11,20 @@ def temp_store(tmp_path, monkeypatch):
     path = tmp_path / "store.json"
     monkeypatch.setattr(store, "STORE_PATH", path)
     return path
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """Tests never call the real AI or the internet, even if backend/.env holds a key."""
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    def blocked(*args, **kwargs):
+        raise AssertionError("real network call attempted in a test")
+
+    monkeypatch.setattr(ai_editor, "call_llm", blocked)
+    monkeypatch.setattr(gatherer.httpx, "get", blocked)
+    gatherer.clear_cache()
+    editions.reset_status()
 
 
 @pytest.fixture

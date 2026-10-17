@@ -1,6 +1,6 @@
-// The end of a finite paper. The recall check joins it in Step 10.
+// The end of a finite paper, followed by the recall check.
 
-function CaughtUp({ storyCount }) {
+function CaughtUp({ storyCount, children }) {
   return (
     <section aria-label="End of paper" className="mt-10 border-y-4 border-double border-ink py-10 text-center">
       <p className="font-meta text-xs uppercase tracking-widest text-ink-muted">— 30 —</p>
@@ -8,6 +8,7 @@ function CaughtUp({ storyCount }) {
       <p className="mt-2 text-ink-muted">
         {storyCount} stories, finished. Can you name three things you learned?
       </p>
+      {children}
     </section>
   )
 }

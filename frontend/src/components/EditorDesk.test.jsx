@@ -79,6 +79,20 @@ describe('Editor Desk', () => {
     expect(screen.queryByText('Rogue AI agents broke into live systems')).toBeNull()
   })
 
+  it('quizMe is switched on and jumps to the recall check', async () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    render(<Paper profile={profile} edition={{ ...sampleEdition, recall_quiz: [
+      { question: 'Q?', options: ['x', 'y', 'z'], answer_index: 0, article_id: 'a1' },
+    ] }} />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Editor Desk' })))
+    await screen.findByTestId('editor-desk', {}, { timeout: 8000 })
+    const quizMe = copilot.tools.find((t) => t.name === 'quizMe')
+    expect(quizMe.available).toBe(true)
+    expect(await callTool('quizMe', {})).toMatch(/opened the recall check/i)
+    expect(scrollIntoView.mock.contexts[0]).toBe(document.getElementById('recall-check'))
+  })
+
   it('a repeated swap for the same story and topic does not swap twice', async () => {
     const fresh = { ...sampleEdition.articles[0], topic: 'Climate Tech', headline: 'Solar startup raises $40M', swapped: true }
     swapStory.mockResolvedValue({ ...sampleEdition, articles: [fresh, ...sampleEdition.articles.slice(1)] })

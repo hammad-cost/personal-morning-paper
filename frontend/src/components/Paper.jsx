@@ -6,6 +6,7 @@ import BrainPanel from './BrainPanel'
 import BroadsheetGrid, { readingOrder } from './BroadsheetGrid'
 import CaughtUp from './CaughtUp'
 import Masthead from './Masthead'
+import RecallCheck, { RECALL_ID } from './RecallCheck'
 import SideColumn from './SideColumn'
 import ThreeTakeaways from './ThreeTakeaways'
 
@@ -85,6 +86,21 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition }) {
     if (article.clicked) return
     patchArticle(article.id, { clicked: true })
     signal('CLICK', article).catch(() => patchArticle(article.id, { clicked: false }))
+  }
+
+  const answerQuiz = (question, correct) => {
+    sendSignal({ action: correct ? 'QUIZ_RIGHT' : 'QUIZ_WRONG', edition_id: paper.id, article_id: question.article_id })
+      .then(learned)
+      .catch(() => {})
+  }
+
+  // Jump to the recall check (also used by the Editor Desk's quizMe tool).
+  const openQuiz = () => {
+    const el = document.getElementById(RECALL_ID)
+    if (!el) return 'There is no recall check for this edition.'
+    el.scrollIntoView({ block: 'start' })
+    el.focus({ preventScroll: true })
+    return 'Opened the recall check at the end of the paper.'
   }
 
   // ----- Editor Desk handlers -----
@@ -179,7 +195,9 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition }) {
           side={<SideColumn edition={paper} />}
           cardProps={(a) => ({ skipState: skipStates[a.id], onSkip: skip, onUndo: undo, onReadOriginal: readOriginal })}
         />
-        <CaughtUp storyCount={articles.filter((a) => !a.skipped).length} />
+        <CaughtUp storyCount={articles.filter((a) => !a.skipped).length}>
+          <RecallCheck quiz={paper.recall_quiz} articles={articles} onAnswer={answerQuiz} />
+        </CaughtUp>
       </main>
 
       <BrainPanel open={brainOpen} onClose={closeBrain} refreshKey={brainVersion} />
@@ -203,6 +221,7 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition }) {
             onAdjust={adjustInterest}
             onSwap={swap}
             onPrintNext={onPrintNext ? printNextFromDesk : undefined}
+            onQuiz={openQuiz}
           />
         </Suspense>
       )}

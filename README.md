@@ -1,159 +1,124 @@
-# The Personal Morning Paper
+# Vale
 
-**One calm, finite newspaper a day, edited for one reader, and getting better with every click and skip.**
+**One calm, finite newspaper a day: made for each student, and smarter after every click, skip and quiz.**
 
-Instagram gave social media one feed. This gives news one finite paper that knows you, and you finish it able to name three things you learned.
+Social media gave us a feed that never ends. Vale gives news a paper that does: 20 stories picked for you, a quick Brain check every 10 so the news actually sticks, then *"You're all caught up"*. Read it as an Instagram-style feed, as a broadsheet, or as a printed PDF with a QR code to every source, emailed to you at 7:00 every morning.
 
-The Personal Morning Paper gathers the day's news on the topics you care about. It ranks the stories with a transparent formula, and Google Gemini writes them up as a broadsheet you can read on the web or download as a PDF. Two CopilotKit experiences sit at its heart: a **conversational onboarding interviewer** that builds your reader profile live on screen, and an **AI Editor Desk** that edits today's paper by chat.
-
-![The broadsheet reading page](docs/screenshots/paper.png)
+![Architecture](architecture-diagram.png)
 
 ---
 
-## Hackathon requirements
+## Run it locally
 
-| # | Requirement | How it is met |
-|---|---|---|
-| 1 | Onboarding that captures interests with great UX | **Talk to the Editor**: a CopilotKit chat. As you answer, your name, masthead (*THE AYESHA CHRONICLE*), topic pills with weights, blocked topics and a one-line bio fill in live on a Reader Profile card beside the chat. The pills are editable by hand, and the chat sees your edits. A 30-second **Quick setup** form is the fallback. |
-| 2 | Daily PDF in a newspaper layout, as personalized as possible | A **ReportLab broadsheet** with a Times-Bold masthead, edition number, a boxed *3 Things You Learned Today* strip and **3 columns with vertical rules**. Headlines are live links. The lead story and section order follow your weights, and skipped stories are left out. |
-| 3 | Full web reading experience, same edition as the PDF, previous papers | A broadsheet page with a 12-column grid (lead across 8 columns, side column in 4) that collapses to one column on phones. Each story has **Read Original ↗**, **Skip ✕ with 5-second Undo** and **"Why this story?"**. A **Past Editions** drawer reopens or downloads any edition. |
-| 4 | Learns over time and improves future papers | Clicks, skips, quiz answers and Editor Desk requests change your topic and source weights, and the weights decide what appears and where. The **Brain** panel shows every change in plain words. **Print next edition** proves it: skip a topic twice and it disappears from the next paper. |
-| 5 | Room to explore | The *3 Things You Learned* box, the *Can you name 3 things?* recall check, the *Connect the Dots* editor's note, the *Morning Mind Vitamin*, a *Something new* explore slot, and the **AI Editor Desk** (*"less politics, more quantum computing"*, *"swap the lead story for climate tech"*, *"why does story 3 matter to me?"*). |
-
-## Screenshots
-
-| | |
+| Part | Link |
 |---|---|
-| ![Brain panel](docs/screenshots/brain.png) **The Brain**: topic weights and the last 10 signals | ![AI Editor Desk](docs/screenshots/editor-desk.png) **AI Editor Desk**: a CopilotKit sidebar that edits the paper |
-| ![Past Editions](docs/screenshots/past-editions.png) **Past Editions**: reopen or download any edition | ![Recall check](docs/screenshots/recall-check.png) **Can you name 3 things?**: the recall check after the last story |
-| ![PDF](docs/screenshots/pdf.png) **The PDF**: a three-column broadsheet with linked headlines | |
+| **Frontend** (the app) | **http://localhost:5173** |
+| **Backend** (API) | **http://localhost:8000** |
+| API docs (Swagger) | http://localhost:8000/docs |
+| Health check | http://localhost:8000/api/health |
 
-## Architecture
-
-![Architecture diagram](architecture-diagram.png)
-
-The browser talks to FastAPI over REST for everything except chat. CopilotKit (v2, via Copilot Cloud) handles chat. It reads the app's state and calls **frontend tools**, and those tools call the same REST endpoints, so the backend stays the single source of truth. The backend calls Gemini **once per edition** and **once per story swap**. The diagram's source is [`docs/architecture-diagram.html`](docs/architecture-diagram.html).
-
-### How an edition is made
-
-1. **Gather** (`gatherer.py`): one Google News RSS query per topic with weight above 0, plus BBC, Ars Technica and The Verge as fallback feeds. Stories are kept for 48 hours, duplicates are removed by URL and near-identical headline, and feeds are cached for 30 minutes. Only RSS text is used; pages are never scraped.
-2. **Rank** (`ranker.py`, pure Python):
-   ```
-   score = topic_weight + recency_bonus (3 if <12h, 1.5 if <24h) + source_weight
-           − 10 if already printed − 1 if the source is a bare domain (e.g. "kpmg.com")
-   ```
-   The ranker takes the top 9, with at most 3 per topic and 1 per outlet per section, plus one **"Something new"** explore story from a low-weight or new topic. The highest score leads, and sections follow topic weight.
-3. **Write** (`ai_editor.py`): **one** Gemini call returns strict JSON (summaries, "why it matters", 3 takeaways, Connect the Dots, a Mind Vitamin and a 3-question quiz). The JSON is validated with Pydantic and checked against the real article ids. Every takeaway and quiz question must cite a story. A bad reply is retried once; after that the paper falls back to the publishers' RSS text with no AI writing.
-4. **Save** (`editions.py` → `store.py`): one edition per day, made the first time the app opens that day, with a lock so two requests never create two editions. The Printing Press screen polls the real step.
-
-### How it learns (`learning.py`)
-
-| Signal | Topic weight | Other effect |
-|---|---|---|
-| Read Original | +2 | source weight +1 |
-| Skip | −3 | hidden on the web, left out of the PDF |
-| Undo skip | +3 | reverses the skip |
-| Recall question right | +1 | |
-| Editor Desk "more / less" | ±5 | logged with the reader's own words |
-| Onboarding | 10 core · 5 casual · −10 blocked | starting weights |
-
-Weights are clamped to **−15 … 25**. Topics with a negative weight are never fetched. Repeated clicks or skips on the same story change nothing.
-
-## Tech stack
-
-- **Backend:** Python 3.11+, FastAPI, Uvicorn, Pydantic, feedparser, httpx, ReportLab, google-genai, python-dotenv. Tests: pytest, FastAPI TestClient, pypdf.
-- **Frontend:** React 19 + Vite, Tailwind CSS v4, lucide-react, CopilotKit (`@copilotkit/react-core/v2`), zod. Tests: Vitest, React Testing Library, jsdom.
-- **AI:** Google Gemini (`gemini-flash-latest`) for writing; CopilotKit Copilot Cloud for both chat experiences.
-
-## Setup
-
-You need **Python 3.11+**, **Node 20+**, a **Gemini API key** ([Google AI Studio](https://aistudio.google.com)) and a **Copilot Cloud public key** ([cloud.copilotkit.ai](https://cloud.copilotkit.ai)).
+You need **Python 3.11+** (3.13 used), **Node 22.12+**, a **Gemini API key** ([Google AI Studio](https://aistudio.google.com)) and a **Copilot Cloud public key** ([cloud.copilotkit.ai](https://cloud.copilotkit.ai)).
 
 ```bash
 git clone https://github.com/hammad-cost/personal-morning-paper.git
 cd personal-morning-paper
 ```
 
-**Backend**
+**1. Backend** → http://localhost:8000
 
 ```bash
 cd backend
 python -m venv venv
 # Windows: venv\Scripts\activate    macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env               # then set GEMINI_API_KEY
+cp .env.example .env          # set GEMINI_API_KEY (the rest is optional, see below)
 uvicorn app.main:app --port 8000
 ```
 
-**Frontend** (in a second terminal)
+**2. Frontend** → http://localhost:5173 (second terminal)
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env               # then set VITE_COPILOTKIT_PUBLIC_API_KEY
+cp .env.example .env          # set VITE_COPILOTKIT_PUBLIC_API_KEY
 npm run dev
 ```
 
 Open **http://localhost:5173**. Vite forwards `/api` to the backend on port 8000.
 
-### Environment variables
+With only the Gemini and Copilot keys, Vale runs in **local mode**: one reader, no sign-in, data in `backend/data/store.json`. Add the Supabase keys for real accounts (every student gets their own paper) and the Brevo keys for the 7am email; `.env.example` in each folder explains every value.
 
-| File | Variable | Purpose |
+---
+
+## What it does
+
+1. **Sign in** with an email link (Supabase). No password; each student gets their own paper.
+2. **Meet the Editor**: a CopilotKit chat asks who you are and what you care about, and builds your Reader Profile live beside the chat. Your paper gets your name: *THE AYESHA CHRONICLE*. (A 30-second Quick setup form is the fallback.)
+3. **Vale prints your paper**: it gathers the last 48 hours of news on your interests, ranks it, finds each story's real publisher link and a photo, and Gemini writes each headline, summary and *why it matters to you*.
+4. **Read a feed that ends**: 10 stories → 🧠 Brain check (3 questions) → *More for you*, 10 stories → Brain check → *You're all caught up* and **3 Things You Learned**, built from your answers. Each post has the publisher's logo, a photo and a citation; ♡ like, ✕ skip (with Undo), ↗ open the original.
+5. **It learns**: every read, like, skip, quiz answer and Editor request changes your interest weights, and tomorrow's paper is ranked with them. *Why this story?* and the **Brain** panel show exactly why.
+6. **Edit it by chat**: the **AI Editor Desk** swaps stories, tunes interests (*"more AI, less sport"*) and prints the next edition. After the morning paper you get 2 extra a day, then *"See you tomorrow."*
+7. **Take it offline**: a **PDF newspaper** with a branded front cover, an *Inside today* index with page numbers, a *What Vale has learned about you* chart, and a scannable **QR code + citation on every story**, emailed with the PDF every morning at 7:00 (Asia/Karachi).
+
+Also: a **Broadsheet** view of the same paper, a **You** page (today's numbers, learned interests, morning email switch), **Past editions**, and an installable web app (PWA) with an Instagram-style layout: sidebar on computers, bottom tabs on phones.
+
+## Hackathon requirements
+
+| # | Requirement | How Vale meets it |
 |---|---|---|
-| `backend/.env` | `GEMINI_API_KEY` | Writes the paper. Without it, editions use the publishers' RSS text. |
-| `backend/.env` | `GEMINI_MODEL` | Optional; defaults to `gemini-flash-latest`. |
-| `frontend/.env` | `VITE_COPILOTKIT_PUBLIC_API_KEY` | Copilot Cloud public key for both chat features. Without it, *Talk to the Editor* is disabled and Quick setup still works. |
+| 1 | Onboarding that captures interests with great UX | **Talk to the Editor** (CopilotKit chat) fills a live Reader Profile card: name, paper name, interest pills with weights, blocked topics, bio. Pills are editable and the chat sees the edits. Quick setup as fallback. |
+| 2 | Daily PDF in a newspaper layout, personalised | Branded cover with the reader's own masthead and lead story, *Inside today* index, interests chart, 3 ruled columns, a photo plus QR code and citation per story, skipped stories left out. Emailed daily with Brevo. |
+| 3 | Full web reading experience, same edition, previous papers | Instagram-style finite feed or broadsheet grid of the same edition, Past editions drawer, PDF download, email. |
+| 4 | Learns over time | Signals change topic and source weights; weights decide what appears and where; the Brain panel explains every change; tomorrow's paper (or *Print next edition*) shows it. |
+| 5 | Room to explore | Brain checks between parts, 3 Things You Learned from your answers, a *Something new* story per 10, publisher logos, scannable QR codes, the AI Editor Desk. |
 
-`.env` files and `backend/data/store.json` are git-ignored. Only the `.example` files are committed.
+## How a paper is made
 
-## Tests
+1. **Gather** (`gatherer.py`): one Google News RSS query per interest plus BBC, The Verge and Ars Technica; last 48 hours; duplicates removed by URL and near-identical headline.
+2. **Rank** (`ranker.py`): `interest weight + freshness bonus + source weight`, minus already-printed and bare-domain penalties. 20 stories in 2 parts of 10, at most 6 per topic, one *Something new* story per 10.
+3. **Links and pictures** (`images.py`, `photos.py`, `logos.py`): Google News links decoded to the real publisher; the news photo, else a free Wikipedia photo of the subject or topic, else a drawn Vale illustration. Every story gets a picture.
+4. **Write** (`ai_editor.py`): one Gemini call returns strict JSON (headlines, summaries, why it matters, 6 quiz questions, 3 takeaways), validated with Pydantic against the real story ids, with a no-AI fallback.
+5. **Save** (`editions.py` → `store.py`): one morning paper per day plus 2 extras, in Supabase (or a local file in local mode).
+
+### How it learns (`learning.py`)
+
+| Signal | Topic weight | Other effect |
+|---|---|---|
+| Read original | +2 | source +1 |
+| Like ♡ | +2 | source +1 |
+| Skip ✕ | −3 | hidden, left out of the PDF |
+| Undo skip / unlike | +3 / −2 | reverses it |
+| Brain check right | +1 | |
+| Editor Desk "more / less" | ±5 | logged in the reader's own words |
+
+Weights are clamped to −15 … 25; negative topics are never fetched.
+
+## Tech stack
+
+- **Frontend:** React 19, Vite, Tailwind CSS v4, CopilotKit (`@copilotkit/react-core/v2`, Copilot Cloud), Supabase JS, lucide-react, zod.
+- **Backend:** Python, FastAPI, Pydantic, feedparser, httpx, Google Gemini (`google-genai`), ReportLab (PDF and QR codes), Pillow, Brevo (email).
+- **Data:** Supabase Auth, Postgres (`vale_readers`, RLS on, server-only access) and Storage (story photos).
+- **Tests:** pytest (181) and Vitest + React Testing Library (115). All network and AI calls are mocked.
 
 ```bash
-cd backend && pytest -q            # 93 tests
-cd frontend && npm test -- --run   # 73 tests
+cd backend && pytest -q
+cd frontend && npm test -- --run
 ```
 
-All network and AI calls are mocked. A `conftest.py` safety net blocks real Gemini and HTTP calls even when a key is present. The tests cover the ranking formula, deduplication, AI-output validation with retry and fallback, one edition per day (including concurrent requests), the learning signals and clamping, story swaps, the archive, the PDF (text, links, skipped stories), and the onboarding, Editor Desk, skip/undo, recall and archive flows.
+## Deploying (optional)
 
-## API
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| GET | `/api/health` | Health check |
-| GET | `/api/state` | Onboarded flag, profile, today's edition id |
-| POST | `/api/onboard` | Save the reader profile |
-| POST | `/api/reset` | Dev only: clear the store |
-| GET | `/api/edition/today` | Today's edition, generated on first request |
-| POST | `/api/edition/next` | Print a new edition now with the current weights |
-| GET | `/api/editions` | Archive, newest first |
-| GET | `/api/edition/{id}` | One edition |
-| GET | `/api/edition/{id}/pdf` | Broadsheet PDF (skipped stories left out) |
-| POST | `/api/edition/{id}/swap` | Replace one story with a fresh one on a topic |
-| POST | `/api/signal` | CLICK, SKIP, UNSKIP, QUIZ_RIGHT, QUIZ_WRONG, COPILOT |
-| GET | `/api/brain` | Weights plus the last 10 signals in plain words |
-| GET | `/api/generation/status` | Printing Press step |
-| GET | `/api/debug/candidates` | Dev only: gathered and ranked candidates |
+`render.yaml` puts both halves on Render's free plan (API web service + static site), and [`docs/DEPLOY.md`](docs/DEPLOY.md) walks through it, including the 7am wake-up with cron-job.org.
 
 ## Project layout
 
 ```
-backend/
-  app/        main.py · store.py · gatherer.py · ranker.py · ai_editor.py
-              editions.py · learning.py · pdf.py · models.py
-  tests/      pytest suite + saved RSS fixtures
-frontend/
-  src/        App.jsx · api.js (the only place that calls the backend)
-  src/components/   Onboarding, EditorInterview, QuickSetup, ReaderProfileCard,
-                    PrintingPress, Paper, Masthead, BroadsheetGrid, StoryCard, ...
-  src/copilot/      CopilotKit provider and the frontend tools for both chats
-docs/         architecture diagram source + screenshots
+backend/app/    main.py (API) · gatherer · ranker · images · photos · logos · ai_editor
+                editions · learning · pdf · mailer · daily (7am job) · auth · store · storage · links
+backend/tests/  pytest suite + saved RSS fixtures
+frontend/src/   App.jsx · api.js / apiBase.js (the only backend calls) · auth/ · copilot/
+frontend/src/components/  AppShell, FeedView, Paper, BroadsheetGrid, StoryCard, RecallCheck,
+                          ThreeTakeaways, YouPage, EditorDesk, EditorInterview, Onboarding, ...
+docs/           architecture diagram source · DEPLOY.md
 ```
 
-## Design notes and limits
-
-- **Honest summaries.** The AI only sees fetched RSS text and is told never to invent facts. Google News descriptions are short, so some summaries say plainly that details weren't given.
-- **Speed.** A new edition takes about 30–40 seconds, almost all of it the Gemini call. That happens once per day (or per *Print next edition*), and the Printing Press shows the real progress.
-- **Guards added during testing.** At most one story per outlet in each section; a small penalty for bare-domain sources so marketing pages don't lead; and an Editor Desk guard so a repeated swap call can't replace a story twice.
-- **Single reader.** State lives in one JSON file, which is right for a personal paper and a hackathon. A multi-user version would move `store.py` to a database.
-
-Built step by step from [`BLUEPRINT.md`](BLUEPRINT.md), with one commit per step.
+Built step by step from [`BLUEPRINT.md`](BLUEPRINT.md), one commit per step.

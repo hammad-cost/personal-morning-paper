@@ -11,7 +11,7 @@ like a newspaper.
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date as date_cls
 from io import BytesIO
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from xml.sax.saxutils import escape
 
 from app import images, photos
@@ -232,7 +232,7 @@ def _later_page(c, doc, meta):
 # ---------- pieces ----------
 
 PHOTOS_IN_PDF = 20  # every story in a 20-story paper
-QR_SIZE = 44  # points; scans easily from a printed page
+QR_SIZE = 80  # points (28 mm): squares stay above ~0.5 mm, which phones read from normal distance
 
 
 class _PageMark(Flowable):
@@ -279,9 +279,23 @@ def _photo(jpeg: bytes, width: float, height: float):
     return picture
 
 
+TRACKING = ("utm_", "fbclid", "gclid", "ocid", "cmpid", "mc_", "ref", "taid")
+
+
+def qr_target(url: str) -> str:
+    """The shortest link that still opens the article: no tracking parameters or fragments.
+    Shorter links make QR codes with fewer, bigger squares, which phones read far more easily."""
+    parts = urlsplit(url)
+    if parts.netloc == "news.google.com":
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if not k.lower().startswith(TRACKING)]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), ""))
+
+
 def _qr(url: str, size: float = QR_SIZE) -> Drawing:
-    """A QR code that opens the original article when scanned."""
-    widget = QrCodeWidget(url, barLevel="M")
+    """A QR code that opens the original article when scanned. Error level L keeps the code
+    as coarse as possible; print is clean, so it doesn't need the extra redundancy."""
+    widget = QrCodeWidget(qr_target(url), barLevel="L")
     x0, y0, x1, y1 = widget.getBounds()
     drawing = Drawing(size, size, transform=[size / (x1 - x0), 0, 0, size / (y1 - y0), 0, 0])
     drawing.add(widget)

@@ -160,3 +160,20 @@ def test_part_two_banner_and_no_printed_quiz():
     text = " ".join(text_of(pdf.build_pdf(ed, "T")).split())
     assert "MORE FOR YOU · PART 2" in text
     assert "Which outlet?" not in text and "BRAIN CHECK" not in text
+
+
+def test_qr_codes_are_coarse_enough_for_a_phone_camera():
+    # Each square must stay around 0.5 mm or more on paper for a typical publisher link.
+    url = "https://www.reuters.com/technology/artificial-intelligence/rogue-ai-agents-break-into-live-systems-2026-10-17/?utm_source=x&utm_medium=rss"
+    qr = pdf._qr(url)
+    widget = qr.contents[0]
+    widget.getBounds()
+    modules = len(widget.qr.modules) + 2 * widget.barBorder
+    module_mm = pdf.QR_SIZE / 72 * 25.4 / modules
+    assert module_mm >= 0.5
+    assert widget.value == "https://www.reuters.com/technology/artificial-intelligence/rogue-ai-agents-break-into-live-systems-2026-10-17/"
+
+
+def test_qr_target_strips_tracking_but_keeps_real_parameters():
+    assert pdf.qr_target("https://a.test/story?id=7&utm_campaign=x&fbclid=y#top") == "https://a.test/story?id=7"
+    assert pdf.qr_target("https://news.google.com/rss/articles/ABC?oc=5&hl=en-US") == "https://news.google.com/rss/articles/ABC"

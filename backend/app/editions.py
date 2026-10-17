@@ -13,7 +13,7 @@ from app import ai_editor, gatherer, images, photos, ranker, store
 from app.store import LOCAL_USER
 
 STEPS = ["gathering", "choosing", "writing", "setting"]
-PHOTO_CANDIDATES = 18  # strongest candidates checked for real photos before choosing
+PHOTO_CANDIDATES = 30  # strongest candidates checked for real photos before choosing (a paper has 20)
 WORDS_PER_MINUTE = 200
 
 # One generation at a time per reader, and a Printing Press status per reader.
@@ -131,6 +131,7 @@ def _assemble(data: dict, paper: dict, output: ai_editor.EditorOutput, writer: s
             "is_lead": a["is_lead"],
             "is_explore": a["is_explore"],
             "label": a.get("label"),
+            "part": a.get("part", 1),
             "skipped": False,
             "clicked": False,
         })

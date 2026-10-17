@@ -187,6 +187,12 @@ function FeedPost({ article, weight, sectionStart, skipState, onSkip, onUndo, on
 
 // ---------- the feed ----------
 
+// Questions belong to the part of the story they ask about.
+const quizFor = (quiz, stories, part) => {
+  const ids = new Set(stories.filter((a) => (a.part ?? 1) === part).map((a) => a.id))
+  return quiz.filter((q) => ids.has(q.article_id))
+}
+
 function FeedView({ stories, sections, takeaways, quiz, articles, weights = {}, cardProps, onAnswer }) {
   const [seen, setSeen] = useState(() => new Set())
   const live = stories.filter((a) => !a.skipped)
@@ -250,22 +256,52 @@ function FeedView({ stories, sections, takeaways, quiz, articles, weights = {}, 
         </ol>
       </section>
 
-      {stories.map((a, i) => (
-        <FeedPost
-          key={a.id}
-          article={a}
-          weight={weights[a.topic]}
-          sectionStart={i === 0 || stories[i - 1].topic !== a.topic}
-          observe={observe}
-          {...cardProps(a)}
-        />
-      ))}
+      {stories.map((a, i) => {
+        const startsPartTwo = (a.part ?? 1) === 2 && (i === 0 || (stories[i - 1].part ?? 1) !== 2)
+        return (
+          <div key={a.id}>
+            {startsPartTwo && (
+              <>
+                <section aria-label="Brain check, part 1" className="border-b border-rule pb-8 text-center">
+                  <RecallCheck
+                    id="recall-check"
+                    quiz={quizFor(quiz, stories, 1)}
+                    articles={articles}
+                    onAnswer={onAnswer}
+                    title="🧠 Brain check · Part 1"
+                    subtitle="Three questions on what you just read. Then 10 more stories."
+                  />
+                </section>
+                <h2 className="pt-6 text-center font-headline text-2xl font-black">More for you · Part 2</h2>
+              </>
+            )}
+            <FeedPost
+              article={a}
+              weight={weights[a.topic]}
+              sectionStart={i === 0 || stories[i - 1].topic !== a.topic || startsPartTwo}
+              observe={observe}
+              {...cardProps(a)}
+            />
+          </div>
+        )
+      })}
 
       <section aria-label="End of paper" className="py-10 text-center">
         <p className="mx-auto flex size-16 items-center justify-center rounded-full border-2 border-accent font-headline text-3xl text-accent">✓</p>
         <h2 className="mt-3 font-headline text-3xl font-black">You&apos;re all caught up.</h2>
         <p className="mt-1 text-sm text-ink-muted">{live.length} stories, finished. Nothing more loads today — that&apos;s the point.</p>
-        <RecallCheck quiz={quiz} articles={articles} onAnswer={onAnswer} />
+        {stories.some((a) => a.part === 2) ? (
+          <RecallCheck
+            id="recall-check-2"
+            quiz={quizFor(quiz, stories, 2)}
+            articles={articles}
+            onAnswer={onAnswer}
+            title="🧠 Brain check · Part 2"
+            subtitle="Last three questions. Then you're done for today."
+          />
+        ) : (
+          <RecallCheck quiz={quiz} articles={articles} onAnswer={onAnswer} />
+        )}
       </section>
     </div>
   )

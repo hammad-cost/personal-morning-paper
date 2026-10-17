@@ -65,7 +65,7 @@ function Question({ q, index, answer, onPick }) {
   )
 }
 
-function RecallCheck({ quiz = [], articles = [], onAnswer }) {
+function RecallCheck({ quiz = [], articles = [], onAnswer, id = RECALL_ID, title = 'Can you name 3 things?', subtitle = "Three quick questions from today's paper." }) {
   const [answers, setAnswers] = useState({})
   // Only ask about stories the reader still has in their paper.
   const live = new Set(articles.filter((a) => !a.skipped).map((a) => a.id))
@@ -82,11 +82,11 @@ function RecallCheck({ quiz = [], articles = [], onAnswer }) {
   }
 
   return (
-    <section id={RECALL_ID} tabIndex={-1} aria-labelledby="recall-title" className="mx-auto mt-8 max-w-3xl scroll-mt-4 text-left outline-none">
-      <h2 id="recall-title" className="text-center font-headline text-2xl font-black">
-        Can you name 3 things?
+    <section id={id} tabIndex={-1} aria-labelledby={`${id}-title`} className="mx-auto mt-8 max-w-3xl scroll-mt-4 text-left outline-none">
+      <h2 id={`${id}-title`} className="text-center font-headline text-2xl font-black">
+        {title}
       </h2>
-      <p className="mt-1 text-center text-sm text-ink-muted">Three quick questions from today&apos;s paper.</p>
+      <p className="mt-1 text-center text-sm text-ink-muted">{subtitle}</p>
       <ol className="mt-4">
         {questions.map((q, i) => (
           <Question key={`${q.article_id}-${i}`} q={q} index={i} answer={answers[i]} onPick={(o) => pick(i, o)} />

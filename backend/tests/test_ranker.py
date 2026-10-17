@@ -4,6 +4,7 @@ from app import ranker
 
 NOW = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
 WEIGHTS = {"AI Agents": 12, "Cybersecurity": 10, "Space": 5, "Crypto": -10}
+TEN = {"size": 10, "max_per_topic": 3}  # the original 10-story rules
 
 
 def art(id, topic, hours_ago=30, source=None, url=None):
@@ -48,7 +49,7 @@ def many_candidates():
 
 
 def test_rank_picks_ten_with_lead_cap_and_one_explore():
-    paper = ranker.rank(many_candidates(), WEIGHTS, now=NOW)
+    paper = ranker.rank(many_candidates(), WEIGHTS, now=NOW, **TEN)
     articles = paper["articles"]
     assert len(articles) == 10
 
@@ -70,13 +71,13 @@ def test_rank_picks_ten_with_lead_cap_and_one_explore():
 
 
 def test_blocked_topics_never_appear():
-    paper = ranker.rank(many_candidates(), WEIGHTS, now=NOW)
+    paper = ranker.rank(many_candidates(), WEIGHTS, now=NOW, **TEN)
     assert "Crypto" not in {a["topic"] for a in paper["articles"]}
     assert "Crypto" not in paper["sections"]
 
 
 def test_sections_follow_topic_weight_and_articles_follow_sections():
-    paper = ranker.rank(many_candidates(), WEIGHTS, now=NOW)
+    paper = ranker.rank(many_candidates(), WEIGHTS, now=NOW, **TEN)
     assert paper["sections"] == ["AI Agents", "Cybersecurity", "Space", "World News"]
     rest = paper["articles"][1:]
     order = [paper["sections"].index(a["topic"]) for a in rest]
@@ -104,7 +105,7 @@ def test_spare_slot_is_filled_when_no_new_topic_is_left():
     counts = {"AI Agents": 4, "Cybersecurity": 4, "Space": 2, "Biology": 2}
     candidates = [art(f"{t[:2]}{i}", t, hours_ago=i) for t, n in counts.items() for i in range(n)]
     weights = {**WEIGHTS, "Biology": 1}
-    paper = ranker.rank(candidates, weights, now=NOW)
+    paper = ranker.rank(candidates, weights, now=NOW, **TEN)
     assert len(paper["articles"]) == 10
     assert sorted(a["id"] for a in paper["articles"] if a["topic"] == "Biology") == ["Bi0", "Bi1"]
     explore = [a for a in paper["articles"] if a["is_explore"]]
@@ -135,3 +136,41 @@ def test_rank_handles_few_or_no_candidates():
     paper = ranker.rank([art("one", "Space")], WEIGHTS, now=NOW)
     assert len(paper["articles"]) == 1
     assert paper["articles"][0]["is_lead"]
+
+
+# ---------- 20-story papers in two parts ----------
+
+def twenty_candidates():
+    topics = ["AI Agents", "Cybersecurity", "Space", "Biology", "World News"]
+    return [art(f"{t[:2]}{i}", t, hours_ago=i) for t in topics for i in range(8)]
+
+
+def test_default_paper_is_twenty_in_two_parts_of_ten():
+    weights = {**WEIGHTS, "Biology": 4}
+    paper = ranker.rank(twenty_candidates(), weights, now=NOW)
+    arts = paper["articles"]
+    assert len(arts) == 20
+    parts = [a["part"] for a in arts]
+    assert parts == [1] * 10 + [2] * 10  # part 1 first, then part 2
+    assert arts[0]["is_lead"] and arts[0]["part"] == 1
+    topics = [a["topic"] for a in arts]
+    assert all(topics.count(t) <= ranker.MAX_PER_TOPIC for t in set(topics))
+    # One "Something new" story in each part.
+    assert [a["part"] for a in arts if a["is_explore"]] == [1, 2]
+
+
+def test_part_one_holds_the_strongest_stories():
+    paper = ranker.rank(twenty_candidates(), {**WEIGHTS, "Biology": 4}, now=NOW)
+    regular = [a for a in paper["articles"] if not a["is_explore"]]
+    worst_in_part1 = min(a["score"] for a in regular if a["part"] == 1)
+    best_in_part2 = max(a["score"] for a in regular if a["part"] == 2)
+    assert worst_in_part1 >= best_in_part2
+
+
+def test_each_part_is_grouped_by_section_in_weight_order():
+    paper = ranker.rank(twenty_candidates(), {**WEIGHTS, "Biology": 4}, now=NOW)
+    order = paper["sections"]
+    for part in (1, 2):
+        topics = [a["topic"] for a in paper["articles"][1:] if a["part"] == part]
+        idx = [order.index(t) for t in topics]
+        assert idx == sorted(idx)

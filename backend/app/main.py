@@ -207,10 +207,10 @@ def unsubscribe(token: str):
 
 def _page(title: str, body: str) -> str:
     return (f'<!doctype html><meta name="viewport" content="width=device-width"><title>Vale</title>'
-            f'<body style="background:#FAF7F2;color:#1A1917;font-family:Georgia,serif;text-align:center;padding:60px 20px">'
+            f'<body style="background:#F3F5F8;color:#1E293B;font-family:Georgia,serif;text-align:center;padding:60px 20px">'
             f'<div style="font-size:32px;font-weight:900">Vale</div>'
-            f'<h1 style="border-top:4px double #1A1917;border-bottom:4px double #1A1917;padding:16px 0">{title}</h1>'
-            f'<p>{body}</p><p><a href="{mailer.app_url()}" style="color:#1A1917">Open Vale</a></p></body>')
+            f'<h1 style="border-top:4px double #1E293B;border-bottom:4px double #1E293B;padding:16px 0">{title}</h1>'
+            f'<p>{body}</p><p><a href="{mailer.app_url()}" style="color:#1E293B">Open Vale</a></p></body>')
 
 
 @app.post("/api/settings", response_model=StateResponse)

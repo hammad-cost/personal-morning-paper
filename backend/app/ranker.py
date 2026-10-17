@@ -11,8 +11,9 @@ score = topic_weight
 import re
 from datetime import datetime, timezone
 
-PAPER_SIZE = 10
-MAX_PER_TOPIC = 3
+PAPER_SIZE = 20
+PART_SIZE = 10  # the feed shows 10, a Brain check, then the next 10
+MAX_PER_TOPIC = 6  # 30% of a 20-story paper, so one interest never takes over
 MAX_PER_SOURCE_PER_TOPIC = 1  # one outlet never fills a section
 EXPLORE_MAX_WEIGHT = 5  # "low or new" topics: weight 5 or less (unknown topics count as 0)
 SEEN_PENALTY = 10
@@ -89,11 +90,13 @@ def _pick_explore(scored: list[dict], picked: list[dict], topic_weights: dict) -
 
 
 def rank(candidates, topic_weights, source_weights=None, seen_urls=None, now=None,
-         size=PAPER_SIZE, max_per_topic=MAX_PER_TOPIC) -> dict:
-    """Pick the paper: top (size-1) by score with a per-topic cap, plus 1 explore story.
+         size=PAPER_SIZE, max_per_topic=MAX_PER_TOPIC, part_size=PART_SIZE) -> dict:
+    """Pick the paper: the best stories by score (per-topic and per-source caps) plus one
+    "Something new" explore story per 10, split into parts of `part_size`.
 
-    Returns {"articles": [...], "sections": [...]} with the lead first, then stories
-    grouped by section in section order.
+    Part 1 = the strongest stories + one explore pick; part 2 = the next ones + another.
+    Returns {"articles": [...], "sections": [...]}: the lead first, then part 1 grouped by
+    section, then part 2 grouped by section. Every article carries its "part".
     """
     scored = score_all(candidates, topic_weights, source_weights, seen_urls, now)
 
@@ -116,13 +119,17 @@ def rank(candidates, topic_weights, source_weights=None, seen_urls=None, now=Non
             per_topic[article["topic"]] = per_topic.get(article["topic"], 0) + 1
             per_source[source_key] = per_source.get(source_key, 0) + 1
 
-    fill(size - 1)
-    explore = _pick_explore(scored, picked, topic_weights)
-    if explore:
-        picked.append({**explore, "is_lead": False, "is_explore": True, "label": EXPLORE_LABEL})
-    else:
-        fill(size)  # no new topic left: use the spare slot for the next best story
-    if not explore and len(picked) > 1:
+    explore_slots = max(1, size // 10)
+    fill(size - explore_slots)
+    explores = []
+    for _ in range(explore_slots):
+        pick = _pick_explore(scored, picked + explores, topic_weights)
+        if not pick:
+            break
+        explores.append({**pick, "is_lead": False, "is_explore": True, "label": EXPLORE_LABEL})
+    picked.extend(explores)
+    fill(size)  # no new topic left for a slot: use it for the next best story
+    if not explores and len(picked) > 1:
         # Few candidates: every story is already in. Label the weakest low-weight one as the explore pick.
         low = [a for a in picked[1:] if topic_weights.get(a["topic"], 0) <= EXPLORE_MAX_WEIGHT]
         if low:
@@ -132,9 +139,19 @@ def rank(candidates, topic_weights, source_weights=None, seen_urls=None, now=Non
     if not picked:
         return {"articles": [], "sections": []}
 
-    # The highest-scoring regular story leads (the explore story only leads if it is alone).
-    regular = [a for a in picked if not a["is_explore"]] or picked
-    lead = max(regular, key=_with_photo)
+    # Parts: part 1 gets the strongest stories and the first explore pick.
+    regular = sorted((a for a in picked if not a["is_explore"]), key=_order)
+    exploring = [a for a in picked if a["is_explore"]]
+    first_regular = part_size - (1 if exploring else 0)
+    part1 = regular[:first_regular] + exploring[:1]
+    part2 = regular[first_regular:] + exploring[1:]
+    for a in part1:
+        a["part"] = 1
+    for a in part2:
+        a["part"] = 2
+
+    # The highest-scoring regular story in part 1 leads (an explore story only leads if alone).
+    lead = max([a for a in part1 if not a["is_explore"]] or part1, key=_with_photo)
     lead["is_lead"] = True
 
     # Sections follow topic weight; ties broken by the section's best score.
@@ -144,5 +161,8 @@ def rank(candidates, topic_weights, source_weights=None, seen_urls=None, now=Non
     sections = sorted(best, key=lambda t: (-topic_weights.get(t, 0), -best[t], t))
 
     order = {t: i for i, t in enumerate(sections)}
-    rest = sorted((a for a in picked if a is not lead), key=lambda a: (order[a["topic"]], -a["score"]))
-    return {"articles": [lead, *rest], "sections": sections}
+    by_section = lambda group: sorted(group, key=lambda a: (order[a["topic"]], -a["score"]))  # noqa: E731
+    return {
+        "articles": [lead, *by_section(a for a in part1 if a is not lead), *by_section(part2)],
+        "sections": sections,
+    }

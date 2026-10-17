@@ -42,8 +42,10 @@ def test_builds_and_saves_todays_edition(onboarded, fake_gather):
     assert edition["edition_number"] == 1
     assert edition["date"] == TODAY
     assert edition["writer"] == "fallback"  # no key in tests
-    assert len(edition["articles"]) == 10
-    assert [a["id"] for a in edition["articles"]] == [f"a{i}" for i in range(1, 11)]
+    assert len(edition["articles"]) == 16  # all 16 fake stories fit in a 20-story paper
+    assert [a["id"] for a in edition["articles"]] == [f"a{i}" for i in range(1, 17)]
+    assert [a["part"] for a in edition["articles"]] == [1] * 10 + [2] * 6
+    assert len(edition["recall_quiz"]) == 6  # a 3-question Brain check after each part
     assert edition["articles"][0]["is_lead"] is True
     assert all(a["skipped"] is False and a["clicked"] is False for a in edition["articles"])
     assert edition["sections"][:2] == ["AI Agents", "Cybersecurity"]

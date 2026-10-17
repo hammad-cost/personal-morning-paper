@@ -64,7 +64,7 @@ def test_valid_ai_response_parses(with_key, monkeypatch):
     # The prompt carries the reader and only the fetched text.
     prompt = json.loads(calls[0].split("\n", 1)[1])
     assert prompt["reader"]["bio"] == "CS student"
-    assert prompt["articles"][0] == {"id": "a1", "topic": "AI Agents", "headline": "Headline 1",
+    assert prompt["articles"][0] == {"id": "a1", "topic": "AI Agents", "part": 1, "headline": "Headline 1",
                                      "source": "Reuters", "text": "Text 1."}
 
 
@@ -132,3 +132,17 @@ def test_fallback_never_repeats_the_headline_as_summary():
 def test_needs_at_least_three_articles():
     with pytest.raises(ValueError):
         ai_editor.write_edition(ARTICLES[:2], "", {})
+
+
+def test_each_part_gets_three_brain_check_questions():
+    arts = [{"id": f"a{i}", "topic": "AI", "headline": f"H{i}", "source_name": f"S{i}", "text": "", "part": 1 if i <= 4 else 2}
+            for i in range(1, 9)]
+    short = ai_editor.EditorOutput.model_validate(valid_output(
+        articles=[{"id": a["id"], "headline": a["headline"], "summary": "S.", "why_it_matters": "W."} for a in arts],
+        recall_quiz=[{"question": f"Q{i}?", "options": ["x", "y", "z"], "answer_index": 0, "article_id": f"a{i}"} for i in (1, 2, 3)],
+    ))
+    quiz = ai_editor.complete_quiz(short, arts).recall_quiz
+    part_of = {a["id"]: a["part"] for a in arts}
+    assert [part_of[q.article_id] for q in quiz] == [1, 1, 1, 2, 2, 2]  # part 2 topped up from the stories
+    fallback = ai_editor.fallback_output(arts).recall_quiz
+    assert [part_of[q.article_id] for q in fallback] == [1, 1, 1, 2, 2, 2]

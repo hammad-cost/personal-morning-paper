@@ -97,3 +97,41 @@ def test_pdf_api(client):
     assert 'filename="the-ayesha-chronicle-edition-2.pdf"' in response.headers["content-disposition"]
     assert "Skipped celebrity gossip story" not in text_of(response.content)
     assert client.get("/api/edition/ed-nope/pdf").status_code == 404
+
+
+# ---------- printed paper extras: QR codes, parts, Brain check ----------
+
+def test_every_printed_story_has_a_qr_and_citation():
+    ed = make_edition()
+    text = " ".join(text_of(pdf.build_pdf(ed, "The Ayesha Chronicle")).split())
+    printed = [a for a in ed["articles"] if not a["skipped"]]
+    assert text.count("Scan for the original") == len(printed)
+    assert "news.test/story/1" in text  # the printed short link
+
+
+def test_qr_codes_hold_the_original_article_link():
+    article = {"url": "https://news.google.com/rss/articles/x", "publisher_url": "https://www.reuters.com/tech/ai-story"}
+    qr = pdf._qr(pdf.link_of(article))
+    assert qr.contents[0].value == "https://www.reuters.com/tech/ai-story"  # straight to the publisher
+    assert qr.width == qr.height == pdf.QR_SIZE
+
+
+def test_short_links_read_well_in_print():
+    assert pdf.short_link("https://www.reuters.com/technology/") == "reuters.com/technology"
+    long = pdf.short_link("https://example.com/" + "a" * 80)
+    assert long.endswith("…") and len(long) == 38
+
+
+def test_part_two_banner_and_printed_brain_check():
+    ed = make_edition(n_articles=8)
+    for a in ed["articles"][4:]:
+        a["part"] = 2
+    ed["recall_quiz"] = [
+        {"question": "Which outlet?", "options": ["One", "Two", "Three"], "answer_index": 1, "article_id": "a1"},
+        {"question": "Skipped story?", "options": ["x", "y", "z"], "answer_index": 0, "article_id": "a3"},  # a3 skipped
+    ]
+    text = " ".join(text_of(pdf.build_pdf(ed, "T")).split())
+    assert "MORE FOR YOU · PART 2" in text
+    assert "BRAIN CHECK" in text and "1. Which outlet?" in text and "B) Two" in text
+    assert "Answers: 1-B" in text
+    assert "Skipped story?" not in text  # questions about skipped stories are left out

@@ -23,7 +23,10 @@ Write in a calm, clear newspaper style. Rules:
 - Never invent numbers, names, quotes or dates.
 - Keep each headline's original meaning; you may tighten wording.
 - summary: 2-3 sentences. why_it_matters: 1 sentence tied to this reader's interests.
-- Write exactly 3 three_takeaways and exactly 3 recall_quiz questions; each must cite a real article_id.
+- Write exactly 3 three_takeaways; each must cite a real article_id.
+- Articles come in part 1 and part 2 (the reader takes a 3-question Brain check after each part). Write 3 recall_quiz
+  questions about part-1 articles, then 3 about part-2 articles (6 in total; only 3 if there is no part 2).
+  Every question must cite a real article_id from the part it belongs to.
 - recall_quiz: 3 options each, answer_index is the 0-based index of the correct option, answerable from the summaries.
 - connect_the_dots: 1-2 sentences linking two or more stories; cite their article_ids.
 - mind_vitamin: a short, calm, practical thought for the day (not news).
@@ -74,7 +77,7 @@ class EditorOutput(BaseModel):
     three_takeaways: list[Takeaway] = Field(min_length=3, max_length=3)
     connect_the_dots: ConnectTheDots
     mind_vitamin: MindVitamin
-    recall_quiz: list[QuizQuestion] = Field(min_length=3, max_length=3)
+    recall_quiz: list[QuizQuestion] = Field(min_length=3, max_length=6)
     section_photos: list[SectionPhoto] = []  # optional: helps find a good topic photo
 
 
@@ -118,6 +121,7 @@ def build_prompt(articles: list[dict], bio: str, topic_weights: dict) -> str:
             {
                 "id": a["id"],
                 "topic": a["topic"],
+                "part": a.get("part", 1),
                 "headline": a["headline"],
                 "source": a["source_name"],
                 "text": a.get("text", ""),
@@ -159,6 +163,36 @@ MIND_VITAMINS = [
 ]
 
 
+def _source_questions(articles: list[dict], part: int, count: int, skip: set[str] = frozenset()) -> list[QuizQuestion]:
+    """No-AI Brain-check questions for one part: which outlet reported this headline?"""
+    sources = list(dict.fromkeys(a["source_name"] for a in articles if a["source_name"]))
+    pool = [a for a in articles if a.get("part", 1) == part and a["id"] not in skip][:count]
+    questions = []
+    for i, a in enumerate(pool):
+        others = [s for s in sources if s != a["source_name"]][:2]
+        others += ["A wire service", "A local paper"][: 2 - len(others)]
+        options = others[:]
+        answer_index = i % 3
+        options.insert(answer_index, a["source_name"] or "Unknown source")
+        questions.append(QuizQuestion(
+            question=f"Which outlet reported: “{a['headline']}”?",
+            options=options, answer_index=answer_index, article_id=a["id"],
+        ))
+    return questions
+
+
+def complete_quiz(output: EditorOutput, articles: list[dict]) -> EditorOutput:
+    """Make sure each part has its 3 Brain-check questions, topping up from the stories if the AI fell short."""
+    part_of = {a["id"]: a.get("part", 1) for a in articles}
+    quiz = []
+    for part in sorted(set(part_of.values())):
+        mine = [q for q in output.recall_quiz if part_of.get(q.article_id) == part][:3]
+        if len(mine) < 3:
+            mine += _source_questions(articles, part, 3 - len(mine), {q.article_id for q in mine})
+        quiz += mine
+    return output.model_copy(update={"recall_quiz": quiz[:6]})
+
+
 def fallback_output(articles: list[dict]) -> EditorOutput:
     """Plain RSS text, no AI. Used when there is no key or the model fails twice."""
     copies = [
@@ -174,18 +208,7 @@ def fallback_output(articles: list[dict]) -> EditorOutput:
     top = articles[:3]
     takeaways = [Takeaway(text=a["headline"], article_id=a["id"]) for a in top]
 
-    sources = list(dict.fromkeys(a["source_name"] for a in articles if a["source_name"]))
-    quiz = []
-    for i, a in enumerate(top):
-        others = [s for s in sources if s != a["source_name"]][:2]
-        others += ["A wire service", "A local paper"][: 2 - len(others)]
-        options = others[:]
-        answer_index = i % 3
-        options.insert(answer_index, a["source_name"] or "Unknown source")
-        quiz.append(QuizQuestion(
-            question=f"Which outlet reported: “{a['headline']}”?",
-            options=options, answer_index=answer_index, article_id=a["id"],
-        ))
+    quiz = [question for part in (1, 2) for question in _source_questions(articles, part, 3)]
 
     topics = list(dict.fromkeys(a["topic"] for a in articles))
     linked = [next(a["id"] for a in articles if a["topic"] == t) for t in topics[:2]]
@@ -298,7 +321,7 @@ def write_edition(articles: list[dict], bio: str, topic_weights: dict) -> tuple[
     prompt = build_prompt(articles, bio, topic_weights)
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            return parse_output(call_llm(prompt), ids), "ai"
+            return complete_quiz(parse_output(call_llm(prompt), ids), articles), "ai"
         except InvalidOutput as exc:
             log.warning("AI editor attempt %d rejected: %s", attempt, exc)
         except Exception as exc:  # network, quota, SDK errors

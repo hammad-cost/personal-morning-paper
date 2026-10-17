@@ -9,6 +9,7 @@ original articles. Skipped stories are left out.
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date as date_cls
 from io import BytesIO
+from urllib.parse import urlsplit
 from xml.sax.saxutils import escape
 
 from app import images, photos
@@ -17,6 +18,8 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
+from reportlab.graphics.barcode.qr import QrCodeWidget
+from reportlab.graphics.shapes import Drawing
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import (
     BaseDocTemplate,
@@ -42,10 +45,11 @@ MASTHEAD_H = 104  # title + rules + meta line on page 1
 TAKEAWAYS_H = 96  # frame for the 3 Things strip on page 1
 RUNNING_HEAD_H = 26
 
-INK = colors.HexColor("#1A1917")
-MUTED = colors.HexColor("#5C5852")
-RULE = colors.HexColor("#D6D1C7")
-ACCENT = colors.HexColor("#B93829")
+# Ink & Blue: slate ink, slate grey, soft grey rules, deep blue accent.
+INK = colors.HexColor("#1E293B")
+MUTED = colors.HexColor("#64748B")
+RULE = colors.HexColor("#E2E8F0")
+ACCENT = colors.HexColor("#1D4ED8")
 
 STYLES = {
     "kicker": ParagraphStyle("kicker", fontName="Helvetica", fontSize=6.5, leading=8, textColor=MUTED, spaceAfter=1),
@@ -59,6 +63,10 @@ STYLES = {
     "box_body": ParagraphStyle("box_body", fontName="Times-Roman", fontSize=8.5, leading=10.5, textColor=INK),
     "box_num": ParagraphStyle("box_num", fontName="Times-Bold", fontSize=20, leading=20, textColor=ACCENT, alignment=TA_CENTER),
     "side_title": ParagraphStyle("side_title", fontName="Times-Bold", fontSize=11, leading=13, textColor=INK, spaceAfter=2),
+    "cite": ParagraphStyle("cite", fontName="Helvetica", fontSize=6.3, leading=7.8, textColor=MUTED),
+    "part": ParagraphStyle("part", fontName="Helvetica-Bold", fontSize=8.5, leading=10, textColor=ACCENT, spaceBefore=6, spaceAfter=4),
+    "quiz_q": ParagraphStyle("quiz_q", fontName="Times-Bold", fontSize=9, leading=11, textColor=INK, spaceBefore=4),
+    "quiz_o": ParagraphStyle("quiz_o", fontName="Times-Roman", fontSize=8.5, leading=10.5, textColor=INK, leftIndent=8),
     "credit": ParagraphStyle("credit", fontName="Helvetica", fontSize=5.5, leading=7, textColor=MUTED, spaceAfter=3),
     "footer": ParagraphStyle("footer", fontName="Helvetica", fontSize=6.5, leading=8, textColor=MUTED, alignment=TA_CENTER),
 }
@@ -207,13 +215,49 @@ def _photo(data: bytes, lead: bool):
     return Image(jpeg, width=width, height=height)
 
 
+QR_SIZE = 44  # points; scans easily from a printed page
+
+
+def _qr(url: str, size: float = QR_SIZE) -> Drawing:
+    """A QR code that opens the original article when scanned."""
+    widget = QrCodeWidget(url, barLevel="M")
+    x0, y0, x1, y1 = widget.getBounds()
+    drawing = Drawing(size, size, transform=[size / (x1 - x0), 0, 0, size / (y1 - y0), 0, 0])
+    drawing.add(widget)
+    return drawing
+
+
+def short_link(url: str, limit: int = 38) -> str:
+    """reuters.com/technology/… — readable in print."""
+    parts = urlsplit(url)
+    text = (parts.netloc.removeprefix("www.") + parts.path).rstrip("/")
+    return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _citation(a: dict) -> Table:
+    """QR code + printed citation: source, date and a short link to the original."""
+    url = link_of(a)
+    when = (a.get("published_at") or "")[:10]
+    words = (f"<b>Scan for the original</b><br/>{_t(a.get('source_name'))}"
+             + (f" · {when}" if when else "") + f"<br/>{_link(url, _t(short_link(url)))}")
+    table = Table([[_qr(url), Paragraph(words, STYLES["cite"])]], colWidths=[QR_SIZE + 4, COL_W - QR_SIZE - 4])
+    table.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    return table
+
+
 def _story(a: dict, lead: bool, section: str | None = None, photo=None) -> KeepTogether:
     # Regular stories sit under their section header, so only the lead and special stories get a kicker.
     kicker = None
     if a.get("is_explore"):
-        kicker = f'<font color="#B93829">{_t(a.get("label") or "Something new").upper()}</font>'
+        kicker = f'<font color="#1D4ED8">{_t(a.get("label") or "Something new").upper()}</font>'
     elif lead:
-        kicker = f'<font color="#B93829">{_t(a["topic"]).upper()}  ·  LEAD STORY</font>'
+        kicker = f'<font color="#1D4ED8">{_t(a["topic"]).upper()}  ·  LEAD STORY</font>'
     elif a.get("swapped"):
         kicker = "EDITOR'S SWAP"
     # A section header travels with its first story so it is never stranded at a column foot.
@@ -227,7 +271,7 @@ def _story(a: dict, lead: bool, section: str | None = None, photo=None) -> KeepT
     ]
     if a.get("why_it_matters"):
         parts.append(Paragraph(f"Why it matters to you: {_t(a['why_it_matters'])}", STYLES["why"]))
-    parts.append(Paragraph(f"{_t(a.get('source_name'))}  ·  {_link(link_of(a), 'Read original')}", STYLES["source"]))
+    parts.append(_citation(a))
     parts.append(Spacer(1, 9))
     return KeepTogether(parts)
 
@@ -252,6 +296,23 @@ def _side_boxes(edition: dict) -> list:
             ("RIGHTPADDING", (0, 0), (-1, -1), 0),
         ]))
         flow += [KeepTogether([box]), Spacer(1, 10)]
+    return flow
+
+
+def _brain_check(edition: dict, stories: list[dict]) -> list:
+    """The day's Brain-check questions, printed, with the answers in small type at the end."""
+    live = {a["id"] for a in stories}
+    questions = [q for q in edition.get("recall_quiz", []) if q.get("article_id") in live and len(q.get("options", [])) == 3]
+    if not questions:
+        return []
+    flow = [Paragraph("BRAIN CHECK", STYLES["section"])]
+    answers = []
+    for n, q in enumerate(questions, start=1):
+        flow.append(Paragraph(f"{n}. {_t(q['question'])}", STYLES["quiz_q"]))
+        for letter, option in zip("ABC", q["options"]):
+            flow.append(Paragraph(f"{letter}) {_t(option)}", STYLES["quiz_o"]))
+        answers.append(f"{n}-{'ABC'[q['answer_index']]}")
+    flow += [Spacer(1, 4), Paragraph("Answers: " + "  ".join(answers), STYLES["cite"]), Spacer(1, 10)]
     return flow
 
 
@@ -310,11 +371,15 @@ def build_pdf(edition: dict, paper_title: str, compress: bool = True, fetch_imag
     current_section = None
     for i, a in enumerate(stories):
         header = None
+        if a.get("part", 1) == 2 and (i == 0 or stories[i - 1].get("part", 1) != 2):
+            flow.append(Paragraph("MORE FOR YOU · PART 2", STYLES["part"]))
+            current_section = None  # repeat the section header inside part 2
         if i > 0 and a["topic"] != current_section:
             current_section = header = a["topic"]
         photo = _photo(raw[a["id"]], lead=(i == 0)) if raw.get(a["id"]) else None
         flow.append(_story(a, lead=(i == 0), section=header, photo=photo))
     flow += _side_boxes(edition)
+    flow += _brain_check(edition, stories)
     flow.append(Paragraph(f"Every headline links to the original article. Printed by {BRAND}.", STYLES["footer"]))
 
     doc.build(flow)

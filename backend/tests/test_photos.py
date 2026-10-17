@@ -163,7 +163,7 @@ def test_every_story_in_a_new_edition_has_a_picture_even_offline(monkeypatch):
         for i in range(12)
     ])
     edition = editions.get_or_create_today()
-    assert len(edition["articles"]) == 10
+    assert len(edition["articles"]) == 12  # every fake story fits in a 20-story paper
     assert all(a["image_url"].startswith("/api/images/") and a["image_credit"] for a in edition["articles"])
 
 

@@ -29,7 +29,7 @@ def news(monkeypatch):
     def gather(weights):
         calls.append(dict(weights))
         old = [cand(i, TOPICS[i % 4]) for i in range(16)]
-        new = [cand(i, TOPICS[i % 4], "new") for i in range(16)] if len(calls) > 1 else []
+        new = [cand(i, TOPICS[i % 4], "new") for i in range(24)] if len(calls) > 1 else []
         return old + new
 
     monkeypatch.setattr(gatherer, "gather", gather)
@@ -51,16 +51,16 @@ def test_next_edition_increments_the_number_and_avoids_used_urls(onboarded, news
 def test_next_edition_uses_the_updated_weights(onboarded, news):
     first = editions.get_or_create_today()
     crypto = [a for a in first["articles"] if a["topic"] == "Crypto"]
-    assert len(crypto) >= 2
+    assert len(crypto) >= 3
     data = store.load()
-    for a in crypto[:2]:
+    for a in crypto[:3]:
         learning.apply_signal(data, "SKIP", first["id"], a["id"])
     store.save(data)
 
     editions.create_next()
-    assert news[-1]["Crypto"] == 0  # 6 - 3 - 3: the next fetch sees the lower weight
+    assert news[-1]["Crypto"] == -3  # 6 - 3 x 3: the next fetch sees the lower weight
     second = store.load()["editions"][-1]
-    assert sum(a["topic"] == "Crypto" for a in second["articles"]) < len(crypto)
+    assert sum(a["topic"] == "Crypto" for a in second["articles"]) == 0  # blocked topics never print
 
 
 def test_list_is_newest_first(onboarded, news):

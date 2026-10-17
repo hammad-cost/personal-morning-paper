@@ -205,6 +205,13 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
     setDeskOpen((v) => !v)
   }
 
+  // 20-story papers come in two parts with a Brain check in between.
+  const hasPartTwo = articles.some((a) => a.part === 2)
+  const partQuiz = (part) => {
+    const ids = new Set(articles.filter((a) => (a.part ?? 1) === part).map((a) => a.id))
+    return (paper.recall_quiz ?? []).filter((q) => ids.has(q.article_id))
+  }
+
   // Skipped stories stay hidden, except while they fade or offer Undo.
   const visible = articles.filter((a) => !a.skipped || skipStates[a.id])
   const stories = readingOrder(articles.filter((a) => !a.skipped), paper.sections).map((a, i) => ({
@@ -274,14 +281,40 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
           <ThreeTakeaways takeaways={paper.three_takeaways} />
           <main className="mt-6">
             <BroadsheetGrid
-              articles={visible}
+              articles={visible.filter((a) => (a.part ?? 1) === 1)}
               sections={paper.sections}
               weights={weights}
               side={<SideColumn edition={paper} />}
               cardProps={(a) => ({ skipState: skipStates[a.id], onSkip: skip, onUndo: undo, onReadOriginal: readOriginal })}
             />
+            {hasPartTwo ? (
+              <>
+                <RecallCheck
+                  id="recall-check"
+                  quiz={partQuiz(1)}
+                  articles={articles}
+                  onAnswer={answerQuiz}
+                  title="🧠 Brain check · Part 1"
+                  subtitle="Three questions on what you just read. Then 10 more stories."
+                />
+                <h2 className="mt-10 border-y-4 border-double border-ink py-3 text-center font-headline text-3xl font-black">More for you · Part 2</h2>
+                <BroadsheetGrid
+                  noLead
+                  articles={visible.filter((a) => a.part === 2)}
+                  sections={paper.sections}
+                  weights={weights}
+                  cardProps={(a) => ({ skipState: skipStates[a.id], onSkip: skip, onUndo: undo, onReadOriginal: readOriginal })}
+                />
+              </>
+            ) : null}
             <CaughtUp storyCount={articles.filter((a) => !a.skipped).length}>
-              <RecallCheck quiz={paper.recall_quiz} articles={articles} onAnswer={answerQuiz} />
+              <RecallCheck
+                id={hasPartTwo ? 'recall-check-2' : 'recall-check'}
+                quiz={hasPartTwo ? partQuiz(2) : paper.recall_quiz}
+                articles={articles}
+                onAnswer={answerQuiz}
+                {...(hasPartTwo ? { title: '🧠 Brain check · Part 2', subtitle: "Last three questions. Then you're done for today." } : {})}
+              />
             </CaughtUp>
           </main>
         </>

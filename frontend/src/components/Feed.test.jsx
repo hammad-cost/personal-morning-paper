@@ -130,3 +130,38 @@ describe('Daily limit', () => {
     expect(screen.getByRole('button', { name: /print next edition/i })).toBeEnabled()
   })
 })
+
+describe('20-story papers', () => {
+  const twoParts = {
+    ...edition,
+    articles: [
+      ...edition.articles.map((a) => ({ ...a, part: 1 })),
+      { ...edition.articles[1], id: 'b1', headline: 'Part two story', part: 2, is_lead: false, is_explore: false, image_url: '/api/images/b1.jpg' },
+    ],
+    recall_quiz: [
+      { question: 'Part one question?', options: ['a', 'b', 'c'], answer_index: 0, article_id: 'a1' },
+      { question: 'Part two question?', options: ['a', 'b', 'c'], answer_index: 1, article_id: 'b1' },
+    ],
+  }
+
+  it('feed: part 1, a Brain check, part 2, then the final Brain check', async () => {
+    render(<Paper profile={profile} edition={twoParts} />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Feed' })))
+    const order = [...document.querySelectorAll('article[data-article-id], section[aria-label^="Brain check"], [aria-label="End of paper"]')]
+      .map((el) => el.getAttribute('data-article-id') || el.getAttribute('aria-label'))
+    expect(order).toEqual(['a1', 'a2', 'a3', 'Brain check, part 1', 'b1', 'End of paper'])
+    expect(screen.getByRole('heading', { name: /brain check · part 1/i })).toBeInTheDocument()
+    expect(screen.getByText('Part one question?')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /more for you · part 2/i })).toBeInTheDocument()
+    const end = screen.getByRole('region', { name: 'End of paper' })
+    expect(within(end).getByText('Part two question?')).toBeInTheDocument()
+    expect(screen.getByText('0 of 4')).toBeInTheDocument()
+  })
+
+  it('broadsheet: the same two parts with a Brain check in between', () => {
+    render(<Paper profile={profile} edition={twoParts} />)
+    expect(screen.getByRole('heading', { name: /brain check · part 1/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /more for you · part 2/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /brain check · part 2/i })).toBeInTheDocument()
+  })
+})

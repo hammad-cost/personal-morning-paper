@@ -173,11 +173,11 @@ def vale_illustration(topic: str) -> str:
     from PIL import Image, ImageDraw, ImageFont
 
     slug = re.sub(r"[^a-z0-9]+", "-", topic.lower()).strip("-")[:40] or "news"
-    name = f"vale-{slug}.jpg"
+    name = f"vale2-{slug}.jpg"  # v2: Ink & Blue colours
     if (images_dir() / name).is_file():
         return name
     w, h = 1200, 675
-    img = Image.new("RGB", (w, h), (250, 247, 242))
+    img = Image.new("RGB", (w, h), (243, 245, 248))  # Ink & Blue paper grey
     d = ImageDraw.Draw(img)
 
     def font(size):
@@ -186,10 +186,10 @@ def vale_illustration(topic: str) -> str:
         except Exception:
             return ImageFont.load_default()
 
-    ink, muted, accent = (26, 25, 23), (92, 88, 82), (185, 56, 41)
+    ink, muted, accent = (30, 41, 59), (100, 116, 139), (29, 78, 216)
     # Fine hatching in the background, like an engraving.
     for x in range(-h, w, 18):
-        d.line([(x, h), (x + h, 0)], fill=(236, 231, 222), width=2)
+        d.line([(x, h), (x + h, 0)], fill=(226, 232, 240), width=2)
     d.rectangle([40, 40, w - 40, h - 40], outline=ink, width=4)
     d.line([(60, 150), (w - 60, 150)], fill=ink, width=3)
     d.line([(60, 158), (w - 60, 158)], fill=ink, width=1)

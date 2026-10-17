@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { downloadPdf, sendSignal, swapStory } from '../api'
+import { downloadPdf, emailEdition, sendSignal, swapStory, updateSettings } from '../api'
 import { BRAND } from '../brand'
 import { hasCopilot } from '../copilot/config'
 import ArchiveDrawer from './ArchiveDrawer'
@@ -34,7 +34,7 @@ function initialView() {
   return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches ? 'feed' : 'broadsheet'
 }
 
-function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft, account = null }) {
+function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft, account = null, emailReady = false }) {
   const [view, setView] = useState(initialView)
   const [paper, setPaper] = useState(edition)
   const [weights, setWeights] = useState(profile.topic_weights)
@@ -45,6 +45,8 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
   const [deskOpen, setDeskOpen] = useState(false)
   const [deskLoaded, setDeskLoaded] = useState(false)
   const [error, setError] = useState(null)
+  const [notice, setNotice] = useState(null)
+  const [dailyEmail, setDailyEmail] = useState(profile.daily_email !== false)
   const timers = useRef({})
   const paperRef = useRef(paper)
   paperRef.current = paper
@@ -112,6 +114,31 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
     const liked = !article.liked
     patchArticle(article.id, { liked })
     signal(liked ? 'LIKE' : 'UNLIKE', article).catch(() => patchArticle(article.id, { liked: !liked }))
+  }
+
+  const [emailing, setEmailing] = useState(false)
+  const emailPaper = async () => {
+    setError(null)
+    setNotice(null)
+    setEmailing(true)
+    try {
+      const { sent_to: to } = await emailEdition(paper.id)
+      setNotice(`Sent to ${to}. Check your inbox for the PDF.`)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setEmailing(false)
+    }
+  }
+
+  const toggleDailyEmail = async (on) => {
+    setDailyEmail(on)
+    try {
+      await updateSettings({ daily_email: on })
+    } catch (e) {
+      setDailyEmail(!on)
+      setError(e.message)
+    }
   }
 
   const readOriginal = (article) => {
@@ -203,6 +230,7 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
         tools={{
           onDownload: () => downloadPdf(paper.id).catch((e) => setError(e.message)),
           onSignOut: account?.signOut,
+          onEmail: account && emailReady && !emailing ? emailPaper : undefined,
           onBrain: () => setBrainOpen(true),
           onArchive: onOpenEdition ? () => setArchiveOpen(true) : undefined,
           onEditorDesk: hasCopilot() ? openDesk : undefined,
@@ -220,6 +248,11 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
       {error && (
         <p role="alert" className="mt-2 text-center text-sm text-accent">
           {error}
+        </p>
+      )}
+      {notice && (
+        <p role="status" className="mt-2 text-center text-sm">
+          {notice}
         </p>
       )}
 
@@ -256,6 +289,12 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
 
       <footer className="mt-6 text-center font-meta text-[11px] uppercase tracking-widest text-ink-muted">
         {account?.email && <span className="block normal-case tracking-normal">Signed in as {account.email}</span>}
+        {account && emailReady && (
+          <label className="my-2 flex items-center justify-center gap-2 normal-case tracking-normal text-ink">
+            <input type="checkbox" checked={dailyEmail} onChange={(e) => toggleDailyEmail(e.target.checked)} className="accent-[var(--accent)]" />
+            Email me my paper every morning
+          </label>
+        )}
         {profile.name ? `Printed for ${profile.name} by ` : 'Printed by '}
         <span className="font-headline text-sm font-black normal-case tracking-normal text-ink">{BRAND}</span>
       </footer>

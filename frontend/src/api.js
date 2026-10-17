@@ -67,6 +67,11 @@ export const sendSignal = (signal) =>
 
 export const getBrain = () => request('/brain')
 
+// Email an edition (PDF attached) to the signed-in reader's own address.
+export const emailEdition = (id) => request(`/edition/${encodeURIComponent(id)}/email`, { method: 'POST' })
+
+export const updateSettings = (settings) => request('/settings', { method: 'POST', body: JSON.stringify(settings) })
+
 export const swapStory = (editionId, articleId, topic) =>
   request(`/edition/${encodeURIComponent(editionId)}/swap`, {
     method: 'POST',

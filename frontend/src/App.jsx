@@ -70,6 +70,7 @@ function App({ account = null }) {
       onOpenEdition={setEdition}
       extraEditionsLeft={state.extra_editions_left}
       account={account}
+      emailReady={state.email_ready}
     />
   )
 }

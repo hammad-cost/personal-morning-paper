@@ -19,7 +19,7 @@ import httpx
 from app.store import LOCAL_USER
 
 CACHE_SECONDS = 10 * 60
-_cache: dict[str, tuple[float, str]] = {}
+_cache: dict[str, tuple[float, str, str]] = {}  # token hash -> (expires, id, email)
 _guard = threading.Lock()
 
 
@@ -52,8 +52,13 @@ def fetch_user(token: str) -> dict:
 
 def user_id_for(authorization: str | None) -> str:
     """The reader's id from an 'Authorization: Bearer <token>' header."""
+    return identity_for(authorization)[0]
+
+
+def identity_for(authorization: str | None) -> tuple[str, str]:
+    """(reader id, email) from an 'Authorization: Bearer <token>' header; email is "" in local mode."""
     if not enabled():
-        return LOCAL_USER
+        return LOCAL_USER, ""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise NotSignedIn("please sign in")
     token = authorization.split(" ", 1)[1].strip()
@@ -61,7 +66,7 @@ def user_id_for(authorization: str | None) -> str:
     with _guard:
         hit = _cache.get(key)
         if hit and hit[0] > time.monotonic():
-            return hit[1]
+            return hit[1], hit[2]
     try:
         user = fetch_user(token)
     except NotSignedIn:
@@ -71,9 +76,10 @@ def user_id_for(authorization: str | None) -> str:
     uid = user.get("id")
     if not uid:
         raise NotSignedIn("session has no user")
+    email = (user.get("email") or "").strip()
     with _guard:
-        _cache[key] = (time.monotonic() + CACHE_SECONDS, uid)
-    return uid
+        _cache[key] = (time.monotonic() + CACHE_SECONDS, uid, email)
+    return uid, email
 
 
 def clear_cache() -> None:

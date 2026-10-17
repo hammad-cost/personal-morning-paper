@@ -1,7 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app import ai_editor, auth, editions, gatherer, images, photos, store
+from app import ai_editor, auth, editions, gatherer, images, mailer, photos, store
+from app import main
 from app.main import app
 
 
@@ -18,9 +19,11 @@ def no_network(monkeypatch):
     """Tests never call the real AI or the internet, even if backend/.env holds a key."""
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     # Local mode (no sign-in, file storage) unless a test turns Supabase on itself.
-    for name in ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_PUBLISHABLE_KEY"):
+    for name in ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_PUBLISHABLE_KEY", "BREVO_API_KEY", "MAIL_FROM_EMAIL",
+                 "CRON_SECRET", "PUBLIC_APP_URL", "DAILY_EMAIL_HOUR", "DAILY_EMAIL_TIMEZONE"):
         monkeypatch.delenv(name, raising=False)
     auth.clear_cache()
+    main._emails_saved.clear()
     monkeypatch.delenv("MAX_EXTRA_EDITIONS_PER_DAY", raising=False)  # default limit (2) in tests
 
     def blocked(*args, **kwargs):
@@ -33,6 +36,8 @@ def no_network(monkeypatch):
     monkeypatch.setattr(images, "post_form", blocked)
     monkeypatch.setattr(images, "fetch_image", lambda url: None)
     monkeypatch.setattr(photos, "wiki_search", blocked)
+    monkeypatch.setattr(mailer, "send_via_brevo", blocked)
+    monkeypatch.setenv("LINK_SECRET", "test-link-secret")
     images.clear_cache()
     photos._topic_cache.clear()
     gatherer.clear_cache()

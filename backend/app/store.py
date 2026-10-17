@@ -173,3 +173,19 @@ def reset(uid: str = LOCAL_USER) -> dict:
         data = defaults()
         _write(uid, data)
         return data
+
+
+def list_readers() -> list[tuple[str, dict]]:
+    """Every signed-in reader as (id, profile). Used by the morning email job."""
+    if supabase_storage():
+        url, key = supabase_storage()
+        r = httpx.get(f"{url}/rest/v1/{TABLE}", params={"select": "user_id,data"}, headers=_headers(key), timeout=20)
+        r.raise_for_status()
+        return [(row["user_id"], _fill_defaults(row["data"] or defaults())["user"]) for row in r.json()]
+    folder = Path(STORE_PATH).parent / "users"
+    readers = []
+    for path in sorted(folder.glob("*.json")) if folder.exists() else []:
+        data = _read_file(path)
+        if data:
+            readers.append((path.stem, _fill_defaults(data)["user"]))
+    return readers

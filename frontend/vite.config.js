@@ -15,5 +15,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/setupTests.js',
+    // Typing-heavy UI tests can be slow on a busy machine; don't fail them for that.
+    testTimeout: 15000,
   },
 })

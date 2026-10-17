@@ -35,6 +35,8 @@ class UserProfile(BaseModel):
     topic_weights: dict[str, int] = Field(default_factory=dict)
     source_weights: dict[str, int] = Field(default_factory=dict)
     created_at: str | None = None
+    email: str = ""  # from the sign-in account
+    daily_email: bool = True  # morning paper by email
 
 
 class SignalRequest(BaseModel):
@@ -56,3 +58,8 @@ class StateResponse(BaseModel):
     profile: UserProfile
     today_edition_id: str | None
     extra_editions_left: int = 0  # how many more times 'Print next edition' works today
+    email_ready: bool = False  # this server can email papers and the reader has an address
+
+
+class SettingsRequest(BaseModel):
+    daily_email: bool

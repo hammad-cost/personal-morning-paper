@@ -1,25 +1,44 @@
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from app import auth, editions, gatherer, learning, pdf, photos, ranker, store  # noqa: E402  (env must load first)
-from app.models import OnboardRequest, SignalRequest, StateResponse, SwapRequest, UserProfile  # noqa: E402
+from app import auth, daily, editions, gatherer, learning, links, mailer, pdf, photos, ranker, store  # noqa: E402  (env must load first)
+from app.models import OnboardRequest, SettingsRequest, SignalRequest, StateResponse, SwapRequest, UserProfile  # noqa: E402
 
-app = FastAPI(title="Vale")
+MAX_MANUAL_EMAILS_PER_DAY = 5
+_emails_saved: set[tuple[str, str]] = set()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    stop = daily.start_scheduler()  # morning papers by email, if email is set up
+    yield
+    if stop:
+        stop.set()
+
+
+app = FastAPI(title="Vale", lifespan=lifespan)
 
 
 def reader(authorization: Annotated[str | None, Header()] = None) -> str:
     """The signed-in reader's id, or "local" when sign-in is not configured."""
     try:
-        return auth.user_id_for(authorization)
+        uid, email = auth.identity_for(authorization)
     except auth.NotSignedIn as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+    # Keep the account's email on the profile so the morning job knows where to send.
+    if email and (uid, email) not in _emails_saved:
+        if store.load(uid)["user"].get("email") != email:
+            store.update(lambda d: d["user"].update(email=email), uid)
+        _emails_saved.add((uid, email))
+    return uid
 
 
 Reader = Annotated[str, Depends(reader)]
@@ -33,6 +52,7 @@ def _state(data: dict) -> StateResponse:
         profile=profile,
         today_edition_id=today["id"] if today else None,
         extra_editions_left=editions.extra_editions_left(data),
+        email_ready=mailer.configured() and bool(profile.email),
     )
 
 
@@ -137,6 +157,78 @@ def edition_pdf(edition_id: str, uid: Reader):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{pdf.filename_for(edition, title)}"'},
     )
+
+
+@app.post("/api/edition/{edition_id}/email")
+def email_edition(edition_id: str, uid: Reader):
+    """Email this edition (PDF attached) to the signed-in reader's own address."""
+    data = store.load(uid)
+    edition = editions.get_edition(data, edition_id)
+    if not edition:
+        raise HTTPException(status_code=404, detail=f"Edition {edition_id} not found.")
+    today = daily.local_today()
+    sent = data["user"].get("emails_sent", {}).get(today, 0)
+    if sent >= MAX_MANUAL_EMAILS_PER_DAY:
+        raise HTTPException(status_code=429, detail="That's enough emails for today. Try again tomorrow.")
+    try:
+        address = mailer.send_edition(uid, data["user"], editions.with_photos(edition, uid))
+    except mailer.MailError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    store.update(lambda d: d["user"].update(emails_sent={today: sent + 1}), uid)
+    return {"sent_to": address}
+
+
+@app.get("/api/pdf/{token}")
+def pdf_by_link(token: str):
+    """The 7-day download link from an email: works without signing in, only for that paper."""
+    try:
+        link = links.read(token, "pdf")
+    except links.BadLink as exc:
+        raise HTTPException(status_code=403, detail=f"This download link doesn't work: {exc}.") from exc
+    data = store.load(link["u"])
+    edition = editions.get_edition(data, link["e"])
+    if not edition:
+        raise HTTPException(status_code=404, detail="That paper is no longer available.")
+    title = data["user"]["paper_title"]
+    return Response(content=pdf.build_pdf(edition, title), media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{pdf.filename_for(edition, title)}"'})
+
+
+@app.get("/api/unsubscribe/{token}", response_class=HTMLResponse)
+def unsubscribe(token: str):
+    """One click from the email footer turns the morning email off."""
+    try:
+        link = links.read(token, "unsub")
+    except links.BadLink:
+        return HTMLResponse(_page("This link has expired", "Open Vale and switch daily emails off from your paper."), status_code=403)
+    store.update(lambda d: d["user"].update(daily_email=False), link["u"])
+    return _page("Daily emails are off", "You won't get your paper by email any more. You can switch it back on from your paper in Vale.")
+
+
+def _page(title: str, body: str) -> str:
+    return (f'<!doctype html><meta name="viewport" content="width=device-width"><title>Vale</title>'
+            f'<body style="background:#FAF7F2;color:#1A1917;font-family:Georgia,serif;text-align:center;padding:60px 20px">'
+            f'<div style="font-size:32px;font-weight:900">Vale</div>'
+            f'<h1 style="border-top:4px double #1A1917;border-bottom:4px double #1A1917;padding:16px 0">{title}</h1>'
+            f'<p>{body}</p><p><a href="{mailer.app_url()}" style="color:#1A1917">Open Vale</a></p></body>')
+
+
+@app.post("/api/settings", response_model=StateResponse)
+def settings(body: SettingsRequest, uid: Reader):
+    """Reader preferences: the morning email on or off."""
+    return _state(store.update(lambda d: d["user"].update(daily_email=body.daily_email), uid))
+
+
+@app.post("/api/cron/daily")
+def cron_daily(x_cron_secret: Annotated[str | None, Header()] = None):
+    """For an outside scheduler: send today's morning papers. Needs the CRON_SECRET header."""
+    import hmac
+    import os
+
+    secret = os.getenv("CRON_SECRET", "").strip()
+    if not secret or not x_cron_secret or not hmac.compare_digest(x_cron_secret, secret):
+        raise HTTPException(status_code=403, detail="Not allowed.")
+    return daily.run()
 
 
 @app.post("/api/edition/{edition_id}/swap")

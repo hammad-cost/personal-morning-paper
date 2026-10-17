@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+  <channel>
+    <title><![CDATA[BBC News]]></title>
+    <description><![CDATA[BBC News - Technology]]></description>
+    <link>https://www.bbc.co.uk/news/technology</link>
+    <item>
+      <title><![CDATA[Quantum chip sets new error-correction record]]></title>
+      <description><![CDATA[Researchers say the chip kept logical qubits stable for a full second, a first for the field.]]></description>
+      <link>https://www.bbc.co.uk/news/articles/quantum-chip</link>
+      <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/quantum-chip#0</guid>
+      <pubDate>Sat, 17 Oct 2026 09:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title><![CDATA[AI agents can now book your holiday, airline says]]></title>
+      <description><![CDATA[The airline lets software agents compare fares and pay on a traveller's behalf.]]></description>
+      <link>https://www.bbc.co.uk/news/articles/agents-holiday</link>
+      <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/agents-holiday#0</guid>
+      <pubDate>Sat, 17 Oct 2026 08:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title><![CDATA[Celebrity gossip site fined over fake stories]]></title>
+      <description><![CDATA[Regulators fined the site for publishing invented quotes.]]></description>
+      <link>https://www.bbc.co.uk/news/articles/gossip-fine</link>
+      <guid isPermaLink="false">https://www.bbc.co.uk/news/articles/gossip-fine#0</guid>
+      <pubDate>Sat, 17 Oct 2026 10:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

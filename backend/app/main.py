@@ -2,7 +2,7 @@ from datetime import date, datetime, timezone
 
 from fastapi import FastAPI
 
-from app import store
+from app import gatherer, ranker, store
 from app.models import OnboardRequest, StateResponse, UserProfile
 
 app = FastAPI(title="The Personal Morning Paper")
@@ -54,3 +54,23 @@ def onboard(body: OnboardRequest):
 def reset():
     """Dev only: clear the store for a fresh demo."""
     return _state(store.reset())
+
+
+@app.get("/api/debug/candidates")
+def debug_candidates(limit: int = 50):
+    """Dev only: what the gatherer found and what the ranker would print today."""
+    data = store.load()
+    user = data["user"]
+    weights = user["topic_weights"]
+    seen_urls = {a["url"] for e in data["editions"] for a in e.get("articles", [])}
+
+    candidates = gatherer.gather(weights)
+    paper = ranker.rank(candidates, weights, user["source_weights"], seen_urls)
+    scored = ranker.score_all(candidates, weights, user["source_weights"], seen_urls)
+    return {
+        "topics_queried": gatherer.topics_to_query(weights),
+        "blocked_topics": [t for t, w in weights.items() if w < 0],
+        "candidate_count": len(candidates),
+        "paper": paper,
+        "candidates": scored[:limit],
+    }

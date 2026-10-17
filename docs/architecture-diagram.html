@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>The Personal Morning Paper: architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@700;900&display=swap" />
+<style>
+  /* Source for architecture-diagram.png (rendered at 1500x700). */
+  html, body { margin: 0; background: #FAF7F2; }
+  svg { display: block; }
+  .h { font-family: "Playfair Display", Georgia, serif; font-weight: 900; fill: #1A1917; }
+  .t { font-family: Inter, system-ui, sans-serif; fill: #1A1917; }
+  .m { font-family: "JetBrains Mono", ui-monospace, monospace; fill: #5C5852; letter-spacing: .06em; }
+  .box { fill: #FFFDF9; stroke: #1A1917; stroke-width: 2; }
+  .sub { fill: #FAF7F2; stroke: #D6D1C7; stroke-width: 1; }
+  .ext { fill: #FFFDF9; stroke: #1A1917; stroke-width: 1.5; stroke-dasharray: 6 4; }
+  .arrow { stroke: #1A1917; stroke-width: 2; fill: none; }
+  .accent { stroke: #B93829; }
+</style>
+</head>
+<body>
+<svg width="1500" height="700" viewBox="0 0 1500 700" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1A1917" />
+    </marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#B93829" />
+    </marker>
+  </defs>
+
+  <!-- Masthead -->
+  <line x1="40" y1="28" x2="1460" y2="28" stroke="#1A1917" stroke-width="3" />
+  <line x1="40" y1="33" x2="1460" y2="33" stroke="#1A1917" stroke-width="1" />
+  <text x="750" y="78" text-anchor="middle" class="h" font-size="40">THE PERSONAL MORNING PAPER</text>
+  <text x="750" y="104" text-anchor="middle" class="m" font-size="13">ARCHITECTURE · ONE FINITE PAPER A DAY, LEARNED FROM EVERY CLICK AND SKIP</text>
+  <line x1="40" y1="118" x2="1460" y2="118" stroke="#1A1917" stroke-width="1" />
+  <line x1="40" y1="123" x2="1460" y2="123" stroke="#1A1917" stroke-width="3" />
+
+  <!-- Frontend -->
+  <rect x="40" y="160" width="430" height="370" class="box" />
+  <text x="60" y="190" class="m" font-size="12">BROWSER</text>
+  <text x="60" y="218" class="h" font-size="22">React + Vite frontend</text>
+  <rect x="60" y="236" width="390" height="78" class="sub" />
+  <text x="76" y="262" class="t" font-size="15" font-weight="600">Onboarding</text>
+  <text x="76" y="284" class="t" font-size="13">Talk to the Editor (chat) · Quick setup form</text>
+  <text x="76" y="303" class="t" font-size="13">Live Reader Profile card · Printing Press</text>
+  <rect x="60" y="324" width="390" height="78" class="sub" />
+  <text x="76" y="350" class="t" font-size="15" font-weight="600">Broadsheet page</text>
+  <text x="76" y="372" class="t" font-size="13">Masthead · 3 Things · lead + ruled columns</text>
+  <text x="76" y="391" class="t" font-size="13">Skip/Undo · Why this story? · Recall check</text>
+  <rect x="60" y="412" width="390" height="98" class="sub" />
+  <text x="76" y="438" class="t" font-size="15" font-weight="600">Drawers &amp; Editor Desk</text>
+  <text x="76" y="460" class="t" font-size="13">Brain (weights + last 10 signals)</text>
+  <text x="76" y="479" class="t" font-size="13">Past Editions · Download PDF</text>
+  <text x="76" y="498" class="t" font-size="13">AI Editor Desk sidebar (chat edits the paper)</text>
+
+  <!-- CopilotKit -->
+  <rect x="40" y="570" width="430" height="100" class="box" style="stroke:#B93829" />
+  <text x="60" y="598" class="m" font-size="12" style="fill:#B93829">COPILOTKIT v2 · COPILOT CLOUD</text>
+  <text x="60" y="624" class="t" font-size="14">Reads app state (profile draft, open edition, weights)</text>
+  <text x="60" y="645" class="t" font-size="14">Calls frontend tools: addTopics, swapStory, adjustInterest…</text>
+  <path d="M255 530 L255 568" class="arrow accent" marker-start="url(#r)" marker-end="url(#r)" />
+  <text x="268" y="554" class="m" font-size="11" style="fill:#B93829">CHAT + TOOL CALLS</text>
+
+  <!-- REST arrow -->
+  <path d="M472 345 L618 345" class="arrow" marker-start="url(#a)" marker-end="url(#a)" />
+  <text x="545" y="333" text-anchor="middle" class="m" font-size="12">REST /api</text>
+  <text x="545" y="366" text-anchor="middle" class="m" font-size="10">via Vite proxy</text>
+
+  <!-- Backend -->
+  <rect x="620" y="160" width="520" height="510" class="box" />
+  <text x="640" y="190" class="m" font-size="12">PYTHON</text>
+  <text x="640" y="218" class="h" font-size="22">FastAPI backend</text>
+
+  <rect x="640" y="236" width="235" height="92" class="sub" />
+  <text x="656" y="262" class="t" font-size="15" font-weight="600">Ranker</text>
+  <text x="656" y="283" class="t" font-size="12.5">weight + recency + source</text>
+  <text x="656" y="301" class="t" font-size="12.5">− seen · cap 3/topic</text>
+  <text x="656" y="319" class="t" font-size="12.5">lead · explore slot · sections</text>
+
+  <rect x="885" y="236" width="235" height="92" class="sub" />
+  <text x="901" y="262" class="t" font-size="15" font-weight="600">Gatherer</text>
+  <text x="901" y="283" class="t" font-size="12.5">Google News RSS per topic</text>
+  <text x="901" y="301" class="t" font-size="12.5">+ fallback feeds · 48h · dedupe</text>
+  <text x="901" y="319" class="t" font-size="12.5">30-min cache</text>
+
+  <rect x="640" y="338" width="235" height="92" class="sub" />
+  <text x="656" y="364" class="t" font-size="15" font-weight="600">Learning engine</text>
+  <text x="656" y="385" class="t" font-size="12.5">CLICK +2 · SKIP −3 · UNDO +3</text>
+  <text x="656" y="403" class="t" font-size="12.5">QUIZ +1 · COPILOT ±5</text>
+  <text x="656" y="421" class="t" font-size="12.5">clamped −15 … 25</text>
+
+  <rect x="885" y="338" width="235" height="92" class="sub" style="stroke:#B93829" />
+  <text x="901" y="364" class="t" font-size="15" font-weight="600">AI editor</text>
+  <text x="901" y="385" class="t" font-size="12.5">1 call per edition / swap</text>
+  <text x="901" y="403" class="t" font-size="12.5">strict JSON · Pydantic · retry</text>
+  <text x="901" y="421" class="t" font-size="12.5">no-AI fallback</text>
+
+  <rect x="640" y="440" width="235" height="92" class="sub" />
+  <text x="656" y="466" class="t" font-size="15" font-weight="600">Editions</text>
+  <text x="656" y="487" class="t" font-size="12.5">gather → rank → write → save</text>
+  <text x="656" y="505" class="t" font-size="12.5">today · next · archive · swap</text>
+  <text x="656" y="523" class="t" font-size="12.5">Printing Press status</text>
+
+  <rect x="885" y="440" width="235" height="92" class="sub" />
+  <text x="901" y="466" class="t" font-size="15" font-weight="600">PDF press</text>
+  <text x="901" y="487" class="t" font-size="12.5">ReportLab broadsheet</text>
+  <text x="901" y="505" class="t" font-size="12.5">3 ruled columns · linked</text>
+  <text x="901" y="523" class="t" font-size="12.5">headlines · skips left out</text>
+
+  <rect x="640" y="548" width="480" height="104" class="sub" />
+  <text x="656" y="576" class="t" font-size="15" font-weight="600">Store (store.py → data/store.json)</text>
+  <text x="656" y="598" class="t" font-size="12.5">user profile + topic/source weights · editions · signals</text>
+  <text x="656" y="617" class="t" font-size="12.5">one module owns the file · lock + atomic write</text>
+  <text x="656" y="636" class="m" font-size="11">ALL AI ACCESS IN ai_editor.py · ALL FILE ACCESS IN store.py</text>
+
+  <!-- External services -->
+  <rect x="1200" y="236" width="260" height="140" class="ext" />
+  <text x="1220" y="264" class="m" font-size="12">INTERNET</text>
+  <text x="1220" y="292" class="h" font-size="20">Web news</text>
+  <text x="1220" y="318" class="t" font-size="13">Google News RSS search</text>
+  <text x="1220" y="338" class="t" font-size="13">BBC · Ars Technica · The Verge</text>
+  <text x="1220" y="358" class="t" font-size="13">(RSS text only, no scraping)</text>
+
+  <rect x="1200" y="420" width="260" height="120" class="ext" style="stroke:#B93829" />
+  <text x="1220" y="448" class="m" font-size="12" style="fill:#B93829">LLM API</text>
+  <text x="1220" y="476" class="h" font-size="20">Google Gemini</text>
+  <text x="1220" y="502" class="t" font-size="13">gemini-flash-latest</text>
+  <text x="1220" y="522" class="t" font-size="13">summaries, takeaways, quiz</text>
+
+  <path d="M1198 282 L1122 282" class="arrow" marker-end="url(#a)" />
+  <text x="1160" y="272" text-anchor="middle" class="m" font-size="10">fetch</text>
+  <path d="M1122 400 L1198 452" class="arrow accent" marker-end="url(#r)" />
+  <text x="1150" y="446" text-anchor="middle" class="m" font-size="10" style="fill:#B93829">1 call</text>
+
+  <!-- Footer -->
+  <text x="1460" y="690" text-anchor="end" class="m" font-size="11">CopilotKit drives chat; every change still goes through the same REST API, so the backend is the single source of truth.</text>
+</svg>
+</body>
+</html>

@@ -6,7 +6,12 @@ import { copilotApiKey } from './config'
 // With publicApiKey and no runtimeUrl, CopilotKit v2 talks to Copilot Cloud.
 
 function CopilotProvider({ children }) {
-  return <CopilotKit publicApiKey={copilotApiKey}>{children}</CopilotKit>
+  // The dev-only Inspector popup covers the chat in demos; turn it off.
+  return (
+    <CopilotKit publicApiKey={copilotApiKey} enableInspector={false}>
+      {children}
+    </CopilotKit>
+  )
 }
 
 export default CopilotProvider

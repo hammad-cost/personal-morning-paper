@@ -2,11 +2,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from app import editions, gatherer, learning, ranker, store  # noqa: E402  (env must load first)
+from app import editions, gatherer, learning, pdf, ranker, store  # noqa: E402  (env must load first)
 from app.models import OnboardRequest, SignalRequest, StateResponse, SwapRequest, UserProfile  # noqa: E402
 
 app = FastAPI(title="The Personal Morning Paper")
@@ -91,6 +91,21 @@ def edition_by_id(edition_id: str):
     if not edition:
         raise HTTPException(status_code=404, detail=f"Edition {edition_id} not found.")
     return edition
+
+
+@app.get("/api/edition/{edition_id}/pdf")
+def edition_pdf(edition_id: str):
+    """Download the edition as a broadsheet PDF, skipped stories excluded."""
+    data = store.load()
+    edition = editions.get_edition(data, edition_id)
+    if not edition:
+        raise HTTPException(status_code=404, detail=f"Edition {edition_id} not found.")
+    title = data["user"]["paper_title"]
+    return Response(
+        content=pdf.build_pdf(edition, title),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{pdf.filename_for(edition, title)}"'},
+    )
 
 
 @app.post("/api/edition/{edition_id}/swap")

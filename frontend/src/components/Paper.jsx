@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { sendSignal, swapStory } from '../api'
+import { pdfUrl, sendSignal, swapStory } from '../api'
 import { hasCopilot } from '../copilot/config'
 import ArchiveDrawer from './ArchiveDrawer'
 import BrainPanel from './BrainPanel'
@@ -151,6 +151,7 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition }) {
         edition={paper.edition_number}
         readingMinutes={paper.reading_minutes}
         tools={{
+          onDownload: () => window.location.assign(pdfUrl(paper.id)),
           onBrain: () => setBrainOpen(true),
           onArchive: onOpenEdition ? () => setArchiveOpen(true) : undefined,
           onEditorDesk: hasCopilot() ? openDesk : undefined,

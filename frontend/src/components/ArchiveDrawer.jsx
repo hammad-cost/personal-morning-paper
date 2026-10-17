@@ -1,6 +1,6 @@
-import { Printer, X } from 'lucide-react'
+import { Download, Printer, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { getEdition, listEditions } from '../api'
+import { getEdition, listEditions, pdfUrl } from '../api'
 
 // Past Editions: every edition newest first; picking one reopens it.
 
@@ -99,12 +99,12 @@ function ArchiveDrawer({ open, onClose, currentId, onOpen, onPrintNext }) {
               {rows.map((r) => {
                 const current = r.id === currentId
                 return (
-                  <li key={r.id}>
+                  <li key={r.id} className="flex items-start gap-2">
                     <button
                       type="button"
                       onClick={() => pick(r.id)}
                       aria-current={current ? 'page' : undefined}
-                      className={`w-full py-3 text-left hover:bg-paper ${current ? 'border-l-4 border-accent pl-3' : ''}`}
+                      className={`min-w-0 flex-1 py-3 text-left hover:bg-paper ${current ? 'border-l-4 border-accent pl-3' : ''}`}
                     >
                       <span className="block font-meta text-[11px] uppercase tracking-widest text-ink-muted">
                         Edition No. {r.edition_number} · {formatDate(r.date)} · {r.reading_minutes} min
@@ -113,6 +113,14 @@ function ArchiveDrawer({ open, onClose, currentId, onOpen, onPrintNext }) {
                       </span>
                       <span className="mt-1 block font-headline text-lg font-bold leading-snug">{r.lead_headline}</span>
                     </button>
+                    <a
+                      href={pdfUrl(r.id)}
+                      download
+                      aria-label={`Download Edition No. ${r.edition_number} as PDF`}
+                      className="mt-3 flex shrink-0 items-center gap-1 border border-ink px-2 py-1 font-meta text-[11px] uppercase tracking-wider hover:bg-ink hover:text-paper"
+                    >
+                      <Download className="size-3.5" aria-hidden="true" /> PDF
+                    </a>
                   </li>
                 )
               })}

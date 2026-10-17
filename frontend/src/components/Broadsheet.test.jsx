@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { sampleEdition } from '../test/edition'
 import BroadsheetGrid, { columnRule, groupBySection } from './BroadsheetGrid'
@@ -132,8 +132,12 @@ describe('Paper', () => {
     expect(within(side).getByText('Both stories are about trust in automation.')).toBeInTheDocument()
     expect(within(side).getByRole('heading', { name: 'Read slowly' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /you're all caught up/i })).toBeInTheDocument()
-    // Tools from later steps are visible but disabled.
-    expect(screen.getByRole('button', { name: /download pdf/i })).toBeDisabled()
+    // Download PDF goes straight to the edition's PDF URL.
+    const assign = vi.fn()
+    vi.stubGlobal('location', { ...window.location, assign })
+    fireEvent.click(screen.getByRole('button', { name: /download pdf/i }))
+    expect(assign).toHaveBeenCalledWith('/api/edition/ed-2026-10-17-1/pdf')
+    vi.unstubAllGlobals()
     expect(screen.queryByText(/printed without the ai editor/i)).not.toBeInTheDocument()
   })
 })

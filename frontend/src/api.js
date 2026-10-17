@@ -38,6 +38,9 @@ export const listEditions = () => request('/editions')
 
 export const getEdition = (id) => request(`/edition/${encodeURIComponent(id)}`)
 
+// The PDF downloads straight from this URL (the server sends it as an attachment).
+export const pdfUrl = (id) => `/api/edition/${encodeURIComponent(id)}/pdf`
+
 // keepalive lets a CLICK finish even while the browser is busy opening the article.
 export const sendSignal = (signal) =>
   request('/signal', { method: 'POST', body: JSON.stringify(signal), keepalive: true })

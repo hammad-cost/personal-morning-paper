@@ -15,6 +15,7 @@ vi.mock('../api', () => ({
   sendSignal: vi.fn(),
   swapStory: vi.fn(),
   getBrain: vi.fn(),
+  pdfUrl: (id) => `/api/edition/${id}/pdf`,
 }))
 vi.mock('../copilot/config', () => ({ hasCopilot: () => false, copilotApiKey: '' }))
 
@@ -43,6 +44,8 @@ describe('ArchiveDrawer', () => {
     ])
     expect(items[0]).toHaveAttribute('aria-current', 'page')
     expect(items[0]).toHaveTextContent(/reading now/i)
+    // Every entry has its own PDF download.
+    expect(screen.getByRole('link', { name: 'Download Edition No. 1 as PDF' })).toHaveAttribute('href', '/api/edition/ed-2026-10-17-1/pdf')
   })
 
   it('selecting an edition loads it and hands it over', async () => {

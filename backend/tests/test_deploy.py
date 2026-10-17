@@ -107,3 +107,11 @@ def test_email_links_use_the_api_address_when_set(monkeypatch):
     monkeypatch.setenv("PUBLIC_API_URL", "https://vale-api.onrender.com/")
     assert mailer.api_url() == "https://vale-api.onrender.com"
     assert mailer.app_url() == "https://vale.vercel.app"
+
+
+def test_on_render_the_api_address_comes_from_render_itself(monkeypatch):
+    monkeypatch.setenv("PUBLIC_APP_URL", "https://vale-web.onrender.com")
+    monkeypatch.setenv("RENDER_EXTERNAL_URL", "https://vale-api-ab12.onrender.com")
+    assert mailer.api_url() == "https://vale-api-ab12.onrender.com"
+    monkeypatch.setenv("PUBLIC_API_URL", "https://api.example.com")
+    assert mailer.api_url() == "https://api.example.com"  # an explicit setting wins

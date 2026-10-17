@@ -1,5 +1,6 @@
-# Render blueprint for Vale's backend (Render -> New -> Blueprint -> pick this repo).
-# Secrets are marked sync: false: Render asks for them on the first deploy.
+# Render blueprint for Vale: the API (vale-api) and the website (vale-web).
+# Render -> New -> Blueprint -> pick this repo. Values marked sync: false are asked for
+# on the first deploy; see docs/DEPLOY.md for what goes where.
 services:
   - type: web
     name: vale-api
@@ -31,15 +32,13 @@ services:
         sync: false
       - key: MAIL_FROM_NAME
         value: Vale
-      # The Vercel site, e.g. https://vale-paper.vercel.app
+      # The website (vale-web) address, e.g. https://vale-web.onrender.com
       - key: PUBLIC_APP_URL
-        sync: false
-      # This service's own address, e.g. https://vale-api.onrender.com
-      - key: PUBLIC_API_URL
         sync: false
       # Same as PUBLIC_APP_URL (comma-separate more than one)
       - key: ALLOWED_ORIGINS
         sync: false
+      # PUBLIC_API_URL is optional here: Render gives this service RENDER_EXTERNAL_URL.
       - key: DAILY_EMAIL_HOUR
         value: "7"
       - key: DAILY_EMAIL_TIMEZONE
@@ -52,3 +51,35 @@ services:
         generateValue: true
       - key: CRON_SECRET
         generateValue: true
+
+  # The website: a free static site built from frontend/ (no server, served from Render's CDN).
+  - type: web
+    name: vale-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    pullRequestPreviewsEnabled: false
+    routes:
+      # One-page app: every path loads index.html (sign-in links come back to /).
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      # The API (vale-api) address, e.g. https://vale-api-ab12.onrender.com (no trailing slash)
+      - key: VITE_API_BASE
+        sync: false
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: VITE_COPILOTKIT_PUBLIC_API_KEY
+        sync: false
+      - key: VITE_AUTH_GOOGLE
+        value: "false"

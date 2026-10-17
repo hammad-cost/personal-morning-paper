@@ -34,7 +34,12 @@ def app_url() -> str:
 
 
 def api_url() -> str:
-    return (os.getenv("PUBLIC_API_URL", "").strip() or app_url()).rstrip("/")
+    """The API's public address: PUBLIC_API_URL, else Render's own RENDER_EXTERNAL_URL, else the app."""
+    for name in ("PUBLIC_API_URL", "RENDER_EXTERNAL_URL"):
+        value = os.getenv(name, "").strip()
+        if value:
+            return value.rstrip("/")
+    return app_url()
 
 
 def send_via_brevo(message: dict) -> dict:

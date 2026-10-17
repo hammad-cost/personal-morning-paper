@@ -20,7 +20,7 @@ def no_network(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     # Local mode (no sign-in, file storage) unless a test turns Supabase on itself.
     for name in ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_PUBLISHABLE_KEY", "BREVO_API_KEY", "MAIL_FROM_EMAIL",
-                 "CRON_SECRET", "PUBLIC_APP_URL", "PUBLIC_API_URL", "DAILY_EMAIL_HOUR", "DAILY_EMAIL_TIMEZONE",
+                 "CRON_SECRET", "PUBLIC_APP_URL", "PUBLIC_API_URL", "RENDER_EXTERNAL_URL", "DAILY_EMAIL_HOUR", "DAILY_EMAIL_TIMEZONE",
                  "SUPABASE_IMAGES_BUCKET"):
         monkeypatch.delenv(name, raising=False)
     auth.clear_cache()

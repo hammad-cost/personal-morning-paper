@@ -1,4 +1,7 @@
 import { getGenerationStatus, getState, getTodayEdition, onboard, resetStore } from './api'
+import { accessToken } from './auth/supabase'
+
+vi.mock('./auth/supabase', () => ({ accessToken: vi.fn(async () => null) }))
 
 describe('api', () => {
   beforeEach(() => {
@@ -37,5 +40,16 @@ describe('api', () => {
     await getTodayEdition()
     await getGenerationStatus()
     expect(fetch.mock.calls.map((c) => c[0])).toEqual(['/api/edition/today', '/api/generation/status'])
+  })
+
+  it("sends the reader's login token when signed in", async () => {
+    accessToken.mockResolvedValueOnce('jwt-abc')
+    await getState()
+    expect(fetch.mock.calls[0][1].headers.Authorization).toBe('Bearer jwt-abc')
+  })
+
+  it('sends no Authorization header in local mode', async () => {
+    await getState()
+    expect(fetch.mock.calls[0][1].headers.Authorization).toBeUndefined()
   })
 })

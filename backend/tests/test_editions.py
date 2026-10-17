@@ -91,9 +91,9 @@ def test_status_walks_through_the_printing_press_steps(onboarded, monkeypatch):
     seen = []
     real_set = editions._set_status
 
-    def spy(**changes):
-        real_set(**changes)
-        seen.append(editions.get_status()["step"])
+    def spy(uid, **changes):
+        real_set(uid, **changes)
+        seen.append(editions.get_status(uid)["step"])
 
     monkeypatch.setattr(editions, "_set_status", spy)
     monkeypatch.setattr(gatherer, "gather", lambda w: candidates())

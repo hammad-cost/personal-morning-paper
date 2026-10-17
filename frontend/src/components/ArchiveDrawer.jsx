@@ -1,6 +1,6 @@
 import { Download, Printer, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { getEdition, listEditions, pdfUrl } from '../api'
+import { downloadPdf, getEdition, listEditions } from '../api'
 
 // Past Editions: every edition newest first; picking one reopens it.
 
@@ -113,14 +113,14 @@ function ArchiveDrawer({ open, onClose, currentId, onOpen, onPrintNext }) {
                       </span>
                       <span className="mt-1 block font-headline text-lg font-bold leading-snug">{r.lead_headline}</span>
                     </button>
-                    <a
-                      href={pdfUrl(r.id)}
-                      download
+                    <button
+                      type="button"
+                      onClick={() => downloadPdf(r.id).catch((e) => setError(e.message))}
                       aria-label={`Download Edition No. ${r.edition_number} as PDF`}
                       className="mt-3 flex shrink-0 items-center gap-1 border border-ink px-2 py-1 font-meta text-[11px] uppercase tracking-wider hover:bg-ink hover:text-paper"
                     >
                       <Download className="size-3.5" aria-hidden="true" /> PDF
-                    </a>
+                    </button>
                   </li>
                 )
               })}

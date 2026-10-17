@@ -1,10 +1,17 @@
+import { accessToken } from './auth/supabase'
+
 // The only place the frontend talks to the backend.
 // Vite proxies /api to http://localhost:8000 in dev.
 
+async function authHeaders() {
+  const token = await accessToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function request(path, options = {}) {
   const response = await fetch(`/api${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()), ...options.headers },
   })
   if (!response.ok) {
     // FastAPI errors carry a human-readable "detail"; fall back to the status code.
@@ -38,8 +45,21 @@ export const listEditions = () => request('/editions')
 
 export const getEdition = (id) => request(`/edition/${encodeURIComponent(id)}`)
 
-// The PDF downloads straight from this URL (the server sends it as an attachment).
 export const pdfUrl = (id) => `/api/edition/${encodeURIComponent(id)}/pdf`
+
+// Fetch the PDF with the reader's login, then hand it to the browser as a download.
+export async function downloadPdf(id) {
+  const response = await fetch(pdfUrl(id), { headers: await authHeaders() })
+  if (!response.ok) throw new Error(`Could not download the PDF (${response.status})`)
+  const name = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') || '')?.[1] || `vale-${id}.pdf`
+  const url = URL.createObjectURL(await response.blob())
+  const link = Object.assign(document.createElement('a'), { href: url, download: name })
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  return name
+}
 
 // keepalive lets a CLICK finish even while the browser is busy opening the article.
 export const sendSignal = (signal) =>

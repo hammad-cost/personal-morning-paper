@@ -45,7 +45,7 @@ function Welcome({ onPick }) {
   )
 }
 
-function Onboarding({ onOnboarded }) {
+function Onboarding({ onOnboarded, account = null }) {
   const [mode, setMode] = useState('welcome')
   const back = () => setMode('welcome')
 
@@ -57,7 +57,19 @@ function Onboarding({ onOnboarded }) {
       </Suspense>
     )
   }
-  return <Welcome onPick={setMode} />
+  return (
+    <>
+      <Welcome onPick={setMode} />
+      {account && (
+        <p className="pb-6 text-center font-meta text-xs text-ink-muted">
+          Signed in as {account.email} ·{' '}
+          <button type="button" onClick={account.signOut} className="underline">
+            Sign out
+          </button>
+        </p>
+      )}
+    </>
+  )
 }
 
 export default Onboarding

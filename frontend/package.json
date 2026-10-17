@@ -13,6 +13,7 @@
   "dependencies": {
     "@copilotkit/react-core": "^1.79.1",
     "@copilotkit/react-ui": "^1.79.1",
+    "@supabase/supabase-js": "^2.118.0",
     "@tailwindcss/vite": "^4.3.3",
     "lucide-react": "^1.59.0",
     "react": "^19.2.8",

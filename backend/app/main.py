@@ -1,16 +1,28 @@
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Annotated
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from fastapi.responses import FileResponse
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from app import editions, gatherer, learning, pdf, photos, ranker, store  # noqa: E402  (env must load first)
+from app import auth, editions, gatherer, learning, pdf, photos, ranker, store  # noqa: E402  (env must load first)
 from app.models import OnboardRequest, SignalRequest, StateResponse, SwapRequest, UserProfile  # noqa: E402
 
 app = FastAPI(title="Vale")
+
+
+def reader(authorization: Annotated[str | None, Header()] = None) -> str:
+    """The signed-in reader's id, or "local" when sign-in is not configured."""
+    try:
+        return auth.user_id_for(authorization)
+    except auth.NotSignedIn as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+Reader = Annotated[str, Depends(reader)]
 
 
 def _state(data: dict) -> StateResponse:
@@ -24,18 +36,23 @@ def _state(data: dict) -> StateResponse:
     )
 
 
+def _require_onboarded(uid: str) -> None:
+    if not store.load(uid)["user"]["onboarded"]:
+        raise HTTPException(status_code=409, detail="Reader is not onboarded yet.")
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True}
 
 
 @app.get("/api/state", response_model=StateResponse)
-def get_state():
-    return _state(store.load())
+def get_state(uid: Reader):
+    return _state(store.load(uid))
 
 
 @app.post("/api/onboard", response_model=StateResponse)
-def onboard(body: OnboardRequest):
+def onboard(body: OnboardRequest, uid: Reader):
     def apply(data: dict) -> None:
         user = data["user"]
         user.update(
@@ -48,35 +65,34 @@ def onboard(body: OnboardRequest):
         if not user.get("created_at"):
             user["created_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    return _state(store.update(apply))
+    return _state(store.update(apply, uid))
 
 
 @app.post("/api/reset", response_model=StateResponse)
-def reset():
-    """Dev only: clear the store for a fresh demo."""
-    editions.reset_status()
-    photos.clear()
-    return _state(store.reset())
+def reset(uid: Reader):
+    """Start this reader over (dev/demo). Stored pictures are shared, so only local mode clears them."""
+    editions.reset_status(uid)
+    if uid == store.LOCAL_USER:
+        photos.clear()
+    return _state(store.reset(uid))
 
 
 @app.get("/api/edition/today")
-def edition_today():
+def edition_today(uid: Reader):
     """Today's edition, generated on first request of the day."""
-    if not store.load()["user"]["onboarded"]:
-        raise HTTPException(status_code=409, detail="Reader is not onboarded yet.")
+    _require_onboarded(uid)
     try:
-        return editions.get_or_create_today()
+        return editions.get_or_create_today(uid)
     except editions.GenerationError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/api/edition/next")
-def edition_next():
+def edition_next(uid: Reader):
     """Print a new edition now using the updated weights (learning demo and archive)."""
-    if not store.load()["user"]["onboarded"]:
-        raise HTTPException(status_code=409, detail="Reader is not onboarded yet.")
+    _require_onboarded(uid)
     try:
-        return editions.create_next()
+        return editions.create_next(uid)
     except editions.DailyLimitReached as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc
     except editions.GenerationError as exc:
@@ -84,23 +100,24 @@ def edition_next():
 
 
 @app.get("/api/editions")
-def editions_list():
+def editions_list(uid: Reader):
     """Past editions, newest first: id, number, date, lead headline."""
-    return editions.list_editions(store.load())
+    return editions.list_editions(store.load(uid))
 
 
 @app.get("/api/edition/{edition_id}")
-def edition_by_id(edition_id: str):
+def edition_by_id(edition_id: str, uid: Reader):
     """One full edition."""
-    edition = editions.get_edition(store.load(), edition_id)
+    edition = editions.get_edition(store.load(uid), edition_id)
     if not edition:
         raise HTTPException(status_code=404, detail=f"Edition {edition_id} not found.")
-    return editions.with_photos(edition)
+    return editions.with_photos(edition, uid)
 
 
 @app.get("/api/images/{name}")
 def image(name: str):
-    """A stored story picture (news photo, Wikimedia photo or Vale illustration)."""
+    """A stored story picture. Public on purpose: <img> tags can't send a login, and the
+    file names are content hashes that reveal nothing about any reader."""
     path = photos.local_name(name)
     if not path:
         raise HTTPException(status_code=404, detail="Image not found.")
@@ -108,9 +125,9 @@ def image(name: str):
 
 
 @app.get("/api/edition/{edition_id}/pdf")
-def edition_pdf(edition_id: str):
+def edition_pdf(edition_id: str, uid: Reader):
     """Download the edition as a broadsheet PDF, skipped stories excluded."""
-    data = store.load()
+    data = store.load(uid)
     edition = editions.get_edition(data, edition_id)
     if not edition:
         raise HTTPException(status_code=404, detail=f"Edition {edition_id} not found.")
@@ -123,10 +140,10 @@ def edition_pdf(edition_id: str):
 
 
 @app.post("/api/edition/{edition_id}/swap")
-def swap(edition_id: str, body: SwapRequest):
+def swap(edition_id: str, body: SwapRequest, uid: Reader):
     """Editor Desk: replace one story with a fresh one on a requested topic."""
     try:
-        return editions.swap_story(edition_id, body.article_id, body.topic)
+        return editions.swap_story(edition_id, body.article_id, body.topic, uid)
     except editions.SwapError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except editions.GenerationError as exc:
@@ -134,13 +151,13 @@ def swap(edition_id: str, body: SwapRequest):
 
 
 @app.get("/api/generation/status")
-def generation_status():
+def generation_status(uid: Reader):
     """Printing Press step for the loading screen."""
-    return editions.get_status()
+    return editions.get_status(uid)
 
 
 @app.post("/api/signal")
-def signal(body: SignalRequest):
+def signal(body: SignalRequest, uid: Reader):
     """Record a reader action and update weights."""
     result = {}
 
@@ -149,7 +166,7 @@ def signal(body: SignalRequest):
         result["topic_weights"] = data["user"]["topic_weights"]
 
     try:
-        store.update(apply)
+        store.update(apply, uid)
     except learning.NotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except learning.SignalError as exc:
@@ -163,15 +180,15 @@ def signal(body: SignalRequest):
 
 
 @app.get("/api/brain")
-def brain():
+def brain(uid: Reader):
     """Topic weights plus the last 10 signals in plain words."""
-    return learning.brain(store.load())
+    return learning.brain(store.load(uid))
 
 
 @app.get("/api/debug/candidates")
-def debug_candidates(limit: int = 50):
+def debug_candidates(uid: Reader, limit: int = 50):
     """Dev only: what the gatherer found and what the ranker would print today."""
-    data = store.load()
+    data = store.load(uid)
     user = data["user"]
     weights = user["topic_weights"]
 

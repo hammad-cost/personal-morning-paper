@@ -4,7 +4,7 @@ import { sampleEdition } from '../test/edition'
 import Paper from './Paper'
 import RecallCheck from './RecallCheck'
 
-vi.mock('../api', () => ({ sendSignal: vi.fn(), swapStory: vi.fn(), getBrain: vi.fn(), pdfUrl: () => '' }))
+vi.mock('../api', () => ({ sendSignal: vi.fn(), swapStory: vi.fn(), getBrain: vi.fn(), pdfUrl: () => '', downloadPdf: vi.fn() }))
 vi.mock('../copilot/config', () => ({ hasCopilot: () => false, copilotApiKey: '' }))
 
 const quiz = [

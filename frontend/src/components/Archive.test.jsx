@@ -16,6 +16,7 @@ vi.mock('../api', () => ({
   swapStory: vi.fn(),
   getBrain: vi.fn(),
   pdfUrl: (id) => `/api/edition/${id}/pdf`,
+  downloadPdf: vi.fn(),
 }))
 vi.mock('../copilot/config', () => ({ hasCopilot: () => false, copilotApiKey: '' }))
 
@@ -37,7 +38,7 @@ describe('ArchiveDrawer', () => {
   it('lists editions newest first and marks the one being read', async () => {
     listEditions.mockResolvedValue(rows)
     render(<ArchiveDrawer open onClose={() => {}} currentId="ed-2026-10-17-2" onOpen={() => {}} />)
-    const items = within(await screen.findByRole('list', { name: 'Editions' })).getAllByRole('button')
+    const items = within(await screen.findByRole('list', { name: 'Editions' })).getAllByRole('button', { name: /^edition no\./i })
     expect(items.map((b) => b.textContent)).toEqual([
       expect.stringContaining('Edition No. 2'),
       expect.stringContaining('Edition No. 1'),
@@ -45,7 +46,7 @@ describe('ArchiveDrawer', () => {
     expect(items[0]).toHaveAttribute('aria-current', 'page')
     expect(items[0]).toHaveTextContent(/reading now/i)
     // Every entry has its own PDF download.
-    expect(screen.getByRole('link', { name: 'Download Edition No. 1 as PDF' })).toHaveAttribute('href', '/api/edition/ed-2026-10-17-1/pdf')
+    expect(screen.getByRole('button', { name: 'Download Edition No. 1 as PDF' })).toBeInTheDocument()
   })
 
   it('selecting an edition loads it and hands it over', async () => {
@@ -55,7 +56,7 @@ describe('ArchiveDrawer', () => {
     const onClose = vi.fn()
     render(<ArchiveDrawer open onClose={onClose} currentId="ed-2026-10-17-2" onOpen={onOpen} />)
     await screen.findByRole('list', { name: 'Editions' })
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: /edition no\. 1/i })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^edition no\. 1/i })))
     expect(getEdition).toHaveBeenCalledWith('ed-2026-10-17-1')
     expect(onOpen).toHaveBeenCalledWith(sampleEdition)
     expect(onClose).toHaveBeenCalled()
@@ -89,7 +90,7 @@ describe('Print next edition and reopen from the archive', () => {
     // Reopen Edition 1 from Past Editions.
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Past Editions' })))
     await screen.findByRole('list', { name: 'Editions' })
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: /edition no\. 1/i })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /^edition no\. 1/i })))
     const masthead = await screen.findByRole('banner')
     await vi.waitFor(() => expect(within(masthead).getByText('Edition No. 1')).toBeInTheDocument())
     expect(screen.getByRole('heading', { level: 2, name: 'Rogue AI agents broke into live systems' })).toBeInTheDocument()

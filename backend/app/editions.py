@@ -10,14 +10,22 @@ import threading
 from datetime import date, datetime, timezone
 
 from app import ai_editor, gatherer, images, photos, ranker, store
+from app.store import LOCAL_USER
 
 STEPS = ["gathering", "choosing", "writing", "setting"]
 PHOTO_CANDIDATES = 18  # strongest candidates checked for real photos before choosing
 WORDS_PER_MINUTE = 200
 
-_generate_lock = threading.Lock()
+# One generation at a time per reader, and a Printing Press status per reader.
+_generate_locks: dict[str, threading.Lock] = {}
 _status_lock = threading.Lock()
-_status = {"state": "idle", "step": None, "step_index": -1, "error": None, "edition_id": None}
+_statuses: dict[str, dict] = {}
+IDLE = {"state": "idle", "step": None, "step_index": -1, "error": None, "edition_id": None}
+
+
+def _gen_lock(uid: str) -> threading.Lock:
+    with _status_lock:
+        return _generate_locks.setdefault(uid, threading.Lock())
 
 
 class GenerationError(RuntimeError):
@@ -54,20 +62,26 @@ def _attempt(fn):
 
 # ---------- status ----------
 
-def get_status() -> dict:
+def get_status(uid: str = LOCAL_USER) -> dict:
     with _status_lock:
-        return dict(_status)
+        return dict(_statuses.get(uid, IDLE))
 
 
-def _set_status(**changes) -> None:
+def _set_status(uid: str, **changes) -> None:
     with _status_lock:
-        _status.update(changes)
+        status = _statuses.setdefault(uid, dict(IDLE))
+        status.update(changes)
         if "step" in changes:
-            _status["step_index"] = STEPS.index(changes["step"]) if changes["step"] else -1
+            status["step_index"] = STEPS.index(changes["step"]) if changes["step"] else -1
 
 
-def reset_status() -> None:
-    _set_status(state="idle", step=None, error=None, edition_id=None)
+def reset_status(uid: str | None = None) -> None:
+    """Back to idle for one reader, or for everyone when uid is None."""
+    with _status_lock:
+        if uid is None:
+            _statuses.clear()
+        else:
+            _statuses.pop(uid, None)
 
 
 # ---------- helpers ----------
@@ -139,15 +153,15 @@ def _assemble(data: dict, paper: dict, output: ai_editor.EditorOutput, writer: s
 
 # ---------- generation ----------
 
-def generate(data: dict) -> dict:
+def generate(data: dict, uid: str = LOCAL_USER) -> dict:
     """Build a new edition from the current store data (does not save it)."""
     user = data["user"]
     weights = user["topic_weights"]
 
-    _set_status(state="running", step="gathering", error=None, edition_id=None)
+    _set_status(uid, state="running", step="gathering", error=None, edition_id=None)
     candidates = gatherer.gather(weights)
 
-    _set_status(step="choosing")
+    _set_status(uid, step="choosing")
     # Look for real photos among the strongest candidates first, so near-ties can favour them.
     scored = ranker.score_all(candidates, weights, user["source_weights"], seen_urls(data))
     top = {a["id"] for a in scored[:PHOTO_CANDIDATES]}
@@ -159,10 +173,10 @@ def generate(data: dict) -> dict:
     for i, a in enumerate(paper["articles"], start=1):
         a["id"] = f"a{i}"
 
-    _set_status(step="writing")
+    _set_status(uid, step="writing")
     output, writer = ai_editor.write_edition(paper["articles"], user["bio"], weights)
 
-    _set_status(step="setting")
+    _set_status(uid, step="setting")
     edition = _assemble(data, paper, output, writer)
     # Every story gets a stored picture: news photo, subject photo, topic photo or Vale illustration.
     photos.ensure(
@@ -173,14 +187,14 @@ def generate(data: dict) -> dict:
     return edition
 
 
-def _generate_and_save() -> dict:
+def _generate_and_save(uid: str = LOCAL_USER) -> dict:
     try:
-        edition = generate(store.load())
+        edition = generate(store.load(uid), uid)
     except Exception as exc:
-        _set_status(state="error", error=str(exc))
+        _set_status(uid, state="error", error=str(exc))
         raise
-    store.update(lambda d: d["editions"].append(edition))
-    _set_status(state="done", edition_id=edition["id"])
+    store.update(lambda d: d["editions"].append(edition), uid)
+    _set_status(uid, state="done", edition_id=edition["id"])
     return edition
 
 
@@ -206,12 +220,12 @@ def _resection(edition: dict, weights: dict) -> list[str]:
     return kept + new
 
 
-def swap_story(edition_id: str, article_id: str, topic: str) -> dict:
+def swap_story(edition_id: str, article_id: str, topic: str, uid: str = LOCAL_USER) -> dict:
     """Replace one story with a fresh one on `topic`; every other story stays as it was."""
     topic = topic.strip()
     if not topic:
         raise SwapError("a topic is needed to swap a story")
-    data = store.load()
+    data = store.load(uid)
     edition, old = _find(data, edition_id, article_id)
     user = data["user"]
     weights = user["topic_weights"]
@@ -278,7 +292,7 @@ def swap_story(edition_id: str, article_id: str, topic: str) -> dict:
         result["edition"] = ed
 
     result: dict = {}
-    store.update(apply)
+    store.update(apply, uid)
     return result["edition"]
 
 
@@ -304,16 +318,16 @@ def get_edition(data: dict, edition_id: str) -> dict | None:
     return next((e for e in data["editions"] if e["id"] == edition_id), None)
 
 
-def create_next() -> dict:
+def create_next(uid: str = LOCAL_USER) -> dict:
     """Print a new edition now with the current weights, within the daily limit."""
-    with _generate_lock:
-        data = store.load()
+    with _gen_lock(uid):
+        data = store.load(uid)
         if find_today(data) and extra_editions_left(data) == 0:
             raise DailyLimitReached(LIMIT_MESSAGE)
-        return _generate_and_save()
+        return _generate_and_save(uid)
 
 
-def with_photos(edition: dict | None) -> dict | None:
+def with_photos(edition: dict | None, uid: str = LOCAL_USER) -> dict | None:
     """Editions printed before photos existed get pictures the first time they are opened."""
     if not edition or all(photos.is_local(a.get("image_url")) for a in edition["articles"]):
         return edition
@@ -325,18 +339,18 @@ def with_photos(edition: dict | None) -> dict | None:
         if saved:
             saved["articles"] = articles
 
-    store.update(apply)
+    store.update(apply, uid)
     return {**edition, "articles": articles}
 
 
-def get_or_create_today() -> dict:
+def get_or_create_today(uid: str = LOCAL_USER) -> dict:
     """Return today's edition, generating it once if it does not exist yet."""
-    existing = find_today(store.load())
+    existing = find_today(store.load(uid))
     if existing:
-        return with_photos(existing)
-    with _generate_lock:
+        return with_photos(existing, uid)
+    with _gen_lock(uid):
         # Another request may have finished generating while we waited for the lock.
-        existing = find_today(store.load())
+        existing = find_today(store.load(uid))
         if existing:
             return existing
-        return _generate_and_save()
+        return _generate_and_save(uid)

@@ -3,7 +3,7 @@ import { sendSignal } from '../api'
 import { sampleEdition } from '../test/edition'
 import Paper, { FADE_MS, VIEW_KEY } from './Paper'
 
-vi.mock('../api', () => ({ sendSignal: vi.fn(), swapStory: vi.fn(), getBrain: vi.fn(), pdfUrl: (id) => `/api/edition/${id}/pdf` }))
+vi.mock('../api', () => ({ sendSignal: vi.fn(), swapStory: vi.fn(), getBrain: vi.fn(), pdfUrl: (id) => `/api/edition/${id}/pdf`, downloadPdf: vi.fn() }))
 vi.mock('../copilot/config', () => ({ hasCopilot: () => false, copilotApiKey: '' }))
 
 const profile = { name: 'Iqra', paper_title: 'THE IQRA TIMES', topic_weights: { 'AI Agents': 10, Cybersecurity: 8 } }

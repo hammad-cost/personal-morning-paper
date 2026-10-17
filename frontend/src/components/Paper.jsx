@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { pdfUrl, sendSignal, swapStory } from '../api'
+import { downloadPdf, sendSignal, swapStory } from '../api'
 import { BRAND } from '../brand'
 import { hasCopilot } from '../copilot/config'
 import ArchiveDrawer from './ArchiveDrawer'
@@ -34,7 +34,7 @@ function initialView() {
   return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches ? 'feed' : 'broadsheet'
 }
 
-function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft }) {
+function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft, account = null }) {
   const [view, setView] = useState(initialView)
   const [paper, setPaper] = useState(edition)
   const [weights, setWeights] = useState(profile.topic_weights)
@@ -201,7 +201,8 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
         edition={paper.edition_number}
         readingMinutes={paper.reading_minutes}
         tools={{
-          onDownload: () => window.location.assign(pdfUrl(paper.id)),
+          onDownload: () => downloadPdf(paper.id).catch((e) => setError(e.message)),
+          onSignOut: account?.signOut,
           onBrain: () => setBrainOpen(true),
           onArchive: onOpenEdition ? () => setArchiveOpen(true) : undefined,
           onEditorDesk: hasCopilot() ? openDesk : undefined,
@@ -254,6 +255,7 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
       )}
 
       <footer className="mt-6 text-center font-meta text-[11px] uppercase tracking-widest text-ink-muted">
+        {account?.email && <span className="block normal-case tracking-normal">Signed in as {account.email}</span>}
         {profile.name ? `Printed for ${profile.name} by ` : 'Printed by '}
         <span className="font-headline text-sm font-black normal-case tracking-normal text-ink">{BRAND}</span>
       </footer>

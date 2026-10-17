@@ -151,7 +151,7 @@ describe('ThreeTakeaways', () => {
 describe('Paper', () => {
   const profile = { paper_title: 'THE AYESHA CHRONICLE', topic_weights: { 'AI Agents': 10 } }
 
-  it('lays out masthead, takeaways, side column and the caught-up ending', () => {
+  it('lays out masthead, takeaways, side column and the caught-up ending', async () => {
     render(<Paper profile={profile} edition={sampleEdition} />)
     expect(screen.getByRole('heading', { level: 1, name: 'THE AYESHA CHRONICLE' })).toBeInTheDocument()
     expect(screen.getByText(/edition no\. 1/i)).toBeInTheDocument()
@@ -160,11 +160,13 @@ describe('Paper', () => {
     expect(within(side).getByText('Both stories are about trust in automation.')).toBeInTheDocument()
     expect(within(side).getByRole('heading', { name: 'Read slowly' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /you're all caught up/i })).toBeInTheDocument()
-    // Download PDF goes straight to the edition's PDF URL.
-    const assign = vi.fn()
-    vi.stubGlobal('location', { ...window.location, assign })
+    // Download PDF fetches the edition's PDF (with the reader's login when signed in).
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, headers: new Headers(), blob: () => Promise.resolve(new Blob(['%PDF'])) })
+    vi.stubGlobal('fetch', fetchMock)
+    URL.createObjectURL = vi.fn(() => 'blob:pdf')
+    URL.revokeObjectURL = vi.fn()
     fireEvent.click(screen.getByRole('button', { name: /download pdf/i }))
-    expect(assign).toHaveBeenCalledWith('/api/edition/ed-2026-10-17-1/pdf')
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/edition/ed-2026-10-17-1/pdf', expect.any(Object)))
     vi.unstubAllGlobals()
     expect(screen.queryByText(/printed without the ai editor/i)).not.toBeInTheDocument()
   })

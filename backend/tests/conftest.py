@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app import ai_editor, editions, gatherer, images, photos, store
+from app import ai_editor, auth, editions, gatherer, images, photos, store
 from app.main import app
 
 
@@ -17,6 +17,10 @@ def temp_store(tmp_path, monkeypatch):
 def no_network(monkeypatch):
     """Tests never call the real AI or the internet, even if backend/.env holds a key."""
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    # Local mode (no sign-in, file storage) unless a test turns Supabase on itself.
+    for name in ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_PUBLISHABLE_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    auth.clear_cache()
     monkeypatch.delenv("MAX_EXTRA_EDITIONS_PER_DAY", raising=False)  # default limit (2) in tests
 
     def blocked(*args, **kwargs):

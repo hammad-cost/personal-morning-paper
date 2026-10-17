@@ -1,4 +1,4 @@
-import { Archive, Brain, Download, GalleryVertical, MessagesSquare, Newspaper, Printer } from 'lucide-react'
+import { Archive, Brain, Download, GalleryVertical, LogOut, MessagesSquare, Newspaper, Printer } from 'lucide-react'
 
 // Broadsheet masthead: double rules, centered title, meta row, and the paper's tools.
 // Tools without an onClick are not built yet and render disabled.
@@ -77,6 +77,7 @@ function Masthead({ title, date = new Date(), volume = 1, edition = null, readin
           <ToolButton icon={Brain} label="Brain" onClick={tools.onBrain} comingIn="Step 6" />
           <ToolButton icon={MessagesSquare} label="Editor Desk" onClick={tools.onEditorDesk} comingIn="Step 7" />
           <ToolButton icon={Printer} label="Print next edition" onClick={tools.onPrintNext} comingIn="Step 8" note={printNote} />
+          {tools.onSignOut && <ToolButton icon={LogOut} label="Sign out" onClick={tools.onSignOut} />}
         </nav>
       )}
       {printNote && <p className="pb-1 font-meta text-[11px] text-ink-muted">{printNote}</p>}

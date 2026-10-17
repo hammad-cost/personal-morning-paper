@@ -4,7 +4,7 @@ import Onboarding from './components/Onboarding'
 import Paper from './components/Paper'
 import PrintingPress from './components/PrintingPress'
 
-function App() {
+function App({ account = null }) {
   const [state, setState] = useState(null)
   const [edition, setEdition] = useState(null)
   const [printingNext, setPrintingNext] = useState(false)
@@ -57,7 +57,7 @@ function App() {
     )
   }
 
-  if (!state.onboarded) return <Onboarding onOnboarded={setState} />
+  if (!state.onboarded) return <Onboarding onOnboarded={setState} account={account} />
   if (printingNext) return <PrintingPress load={loadNext} onReady={finishNext} title="Printing your next edition" />
   // Today's edition loads instantly if it exists; otherwise the press makes it once.
   if (!edition) return <PrintingPress onReady={setEdition} />
@@ -69,6 +69,7 @@ function App() {
       onPrintNext={startNext}
       onOpenEdition={setEdition}
       extraEditionsLeft={state.extra_editions_left}
+      account={account}
     />
   )
 }

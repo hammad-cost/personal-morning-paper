@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from app import auth, daily, editions, gatherer, learning, links, mailer, pdf, photos, ranker, store  # noqa: E402  (env must load first)
+from app import auth, daily, editions, gatherer, learning, links, logos, mailer, pdf, photos, ranker, store  # noqa: E402  (env must load first)
 from app.models import OnboardRequest, SettingsRequest, SignalRequest, StateResponse, SwapRequest, UserProfile  # noqa: E402
 
 MAX_MANUAL_EMAILS_PER_DAY = 5
@@ -144,6 +144,15 @@ def image(name: str):
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
+@app.get("/api/logos/{domain}")
+def logo(domain: str):
+    """A publisher's logo for the feed (public, like story pictures; cached for a week)."""
+    data = logos.get(domain.lower())
+    if not data:
+        raise HTTPException(status_code=404, detail="No logo for that site.")
+    return Response(content=data, media_type="image/png", headers={"Cache-Control": "public, max-age=604800"})
+
+
 @app.get("/api/edition/{edition_id}/pdf")
 def edition_pdf(edition_id: str, uid: Reader):
     """Download the edition as a broadsheet PDF, skipped stories excluded."""
@@ -153,7 +162,7 @@ def edition_pdf(edition_id: str, uid: Reader):
         raise HTTPException(status_code=404, detail=f"Edition {edition_id} not found.")
     title = data["user"]["paper_title"]
     return Response(
-        content=pdf.build_pdf(edition, title),
+        content=pdf.build_pdf(edition, title, weights=data["user"].get("topic_weights"), reader=data["user"].get("name")),
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{pdf.filename_for(edition, title)}"'},
     )
@@ -190,7 +199,7 @@ def pdf_by_link(token: str):
     if not edition:
         raise HTTPException(status_code=404, detail="That paper is no longer available.")
     title = data["user"]["paper_title"]
-    return Response(content=pdf.build_pdf(edition, title), media_type="application/pdf",
+    return Response(content=pdf.build_pdf(edition, title, weights=data["user"].get("topic_weights"), reader=data["user"].get("name")), media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="{pdf.filename_for(edition, title)}"'})
 
 

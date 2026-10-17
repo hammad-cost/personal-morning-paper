@@ -1,4 +1,4 @@
-import { ArrowUpRight, HelpCircle, Undo2, X } from 'lucide-react'
+import { ArrowUpRight, HelpCircle, Link2, Undo2, X } from 'lucide-react'
 import { useId, useState } from 'react'
 import { storyAnchor } from './ThreeTakeaways'
 
@@ -43,6 +43,55 @@ function StoryPhoto({ article, lead }) {
 
 // Straight to the publisher when the backend decoded it, else the feed link.
 export const articleLink = (article) => article.publisher_url || article.url
+
+// "reuters.com/technology/ai-agents…" — readable, like the PDF's printed citation.
+export function shortLink(url, limit = 42) {
+  try {
+    const u = new URL(url)
+    // An undecoded Google News link is a long code; say where it goes instead.
+    if (u.hostname === 'news.google.com') return 'Original article (via Google News)'
+    const text = (u.hostname.replace(/^www\./, '') + u.pathname).replace(/\/$/, '')
+    return text.length <= limit ? text : `${text.slice(0, limit - 1)}…`
+  } catch {
+    return url
+  }
+}
+
+const citeDate = (iso) => {
+  const d = iso ? new Date(iso) : null
+  return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : null
+}
+
+// Citation for one story: who published it, when, and a link to the original.
+export function Citation({ article, onOpen }) {
+  const link = articleLink(article)
+  if (!link) return null
+  const when = citeDate(article.published_at)
+  return (
+    <p className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-lg bg-paper px-3 py-2 text-xs text-ink-muted">
+      <Link2 className="size-3.5 shrink-0 text-accent" aria-hidden="true" />
+      <span>Source:</span>
+      <cite className="font-semibold not-italic text-ink">{article.source_name}</cite>
+      {when && (
+        <>
+          <span aria-hidden="true">·</span>
+          <time dateTime={article.published_at}>{when}</time>
+        </>
+      )}
+      <span aria-hidden="true">·</span>
+      <a
+        href={link}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onOpen ? () => onOpen(article) : undefined}
+        aria-label={`Original source: ${shortLink(link)}`}
+        className="min-w-0 truncate text-accent underline decoration-accent/30 underline-offset-2 hover:decoration-accent"
+      >
+        {shortLink(link)}
+      </a>
+    </p>
+  )
+}
 
 export function SkippedNotice({ article, onUndo }) {
   return (
@@ -102,6 +151,8 @@ function StoryCard({ article, weight, lead = false, skipState, onSkip, onUndo, o
           {article.why_it_matters}
         </p>
       )}
+
+      <Citation article={article} onOpen={onReadOriginal} />
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-meta text-xs uppercase tracking-wider">
         <a

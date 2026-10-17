@@ -1,9 +1,11 @@
-"""Broadsheet PDF for one edition, made with ReportLab.
+"""The printed newspaper for one edition, made with ReportLab.
 
-Page 1: Times-Bold masthead between double rules, meta line, a boxed "3 Things You
-Learned Today" strip, then three columns with vertical rules. Later pages keep the
-three columns under a small running head. Headlines and takeaways link to the
-original articles. Skipped stories are left out.
+Page 1 is the front cover: the Vale brand strip, the reader's own masthead, the lead story
+with a big photo, an "Inside today" index with page numbers, and a "What Vale has learned
+about you" chart. Later pages run the other stories in three ruled columns under a small
+running head. Every story has a photo, a QR code and a printed citation; headlines link to
+the original articles. Skipped stories are left out. No quizzes or study boxes: it reads
+like a newspaper.
 """
 
 from concurrent.futures import ThreadPoolExecutor
@@ -15,17 +17,19 @@ from xml.sax.saxutils import escape
 from app import images, photos
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.graphics.barcode.qr import QrCodeWidget
-from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.shapes import Drawing, Rect, String
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import (
     BaseDocTemplate,
-    FrameBreak,
+    Flowable,
     Frame,
+    FrameBreak,
     Image,
+    KeepInFrame,
     KeepTogether,
     NextPageTemplate,
     PageTemplate,
@@ -36,13 +40,14 @@ from reportlab.platypus import (
 )
 
 BRAND = "Vale"
+TAGLINE = "One calm paper a day, made for you."
 PAGE_W, PAGE_H = A4
 MARGIN = 36
 GUTTER = 14
 COLS = 3
-COL_W = (PAGE_W - 2 * MARGIN - (COLS - 1) * GUTTER) / COLS
-MASTHEAD_H = 104  # title + rules + meta line on page 1
-TAKEAWAYS_H = 96  # frame for the 3 Things strip on page 1
+FULL_W = PAGE_W - 2 * MARGIN
+COL_W = (FULL_W - (COLS - 1) * GUTTER) / COLS
+COVER_HEAD_H = 150  # brand strip + masthead on the cover
 RUNNING_HEAD_H = 26
 
 # Ink & Blue: slate ink, slate grey, soft grey rules, deep blue accent.
@@ -50,35 +55,58 @@ INK = colors.HexColor("#1E293B")
 MUTED = colors.HexColor("#64748B")
 RULE = colors.HexColor("#E2E8F0")
 ACCENT = colors.HexColor("#1D4ED8")
+SKY = colors.HexColor("#3B82F6")
+SOFT = colors.HexColor("#EFF4FF")
 
 STYLES = {
-    "kicker": ParagraphStyle("kicker", fontName="Helvetica", fontSize=6.5, leading=8, textColor=MUTED, spaceAfter=1),
-    "lead": ParagraphStyle("lead", fontName="Times-Bold", fontSize=17, leading=19, textColor=INK, spaceAfter=3),
-    "headline": ParagraphStyle("headline", fontName="Times-Bold", fontSize=11.5, leading=13.5, textColor=INK, spaceAfter=2),
-    "body": ParagraphStyle("body", fontName="Times-Roman", fontSize=9, leading=11.5, textColor=INK, spaceAfter=2),
+    "kicker": ParagraphStyle("kicker", fontName="Helvetica-Bold", fontSize=6.5, leading=8, textColor=ACCENT, spaceAfter=2),
+    "cover_kicker": ParagraphStyle("cover_kicker", fontName="Helvetica-Bold", fontSize=8, leading=10, textColor=ACCENT, spaceAfter=3),
+    "cover_lead": ParagraphStyle("cover_lead", fontName="Times-Bold", fontSize=24, leading=26, textColor=INK, spaceAfter=6),
+    "cover_body": ParagraphStyle("cover_body", fontName="Times-Roman", fontSize=11, leading=14.5, textColor=INK, spaceAfter=4),
+    "cover_why": ParagraphStyle("cover_why", fontName="Times-Italic", fontSize=10, leading=13, textColor=MUTED),
+    "headline": ParagraphStyle("headline", fontName="Times-Bold", fontSize=12, leading=14, textColor=INK, spaceAfter=2),
+    "body": ParagraphStyle("body", fontName="Times-Roman", fontSize=9.2, leading=11.8, textColor=INK, spaceAfter=2),
     "why": ParagraphStyle("why", fontName="Times-Italic", fontSize=8.5, leading=10.5, textColor=MUTED, spaceAfter=2),
-    "source": ParagraphStyle("source", fontName="Helvetica", fontSize=6.5, leading=8, textColor=MUTED),
-    "section": ParagraphStyle("section", fontName="Helvetica-Bold", fontSize=7.5, leading=9, textColor=INK, spaceBefore=4, spaceAfter=3),
-    "box_title": ParagraphStyle("box_title", fontName="Helvetica-Bold", fontSize=7, leading=9, textColor=INK),
-    "box_body": ParagraphStyle("box_body", fontName="Times-Roman", fontSize=8.5, leading=10.5, textColor=INK),
-    "box_num": ParagraphStyle("box_num", fontName="Times-Bold", fontSize=20, leading=20, textColor=ACCENT, alignment=TA_CENTER),
-    "side_title": ParagraphStyle("side_title", fontName="Times-Bold", fontSize=11, leading=13, textColor=INK, spaceAfter=2),
+    "section": ParagraphStyle("section", fontName="Helvetica-Bold", fontSize=7.5, leading=9, textColor=colors.white,
+                              backColor=INK, borderPadding=(2, 3, 2, 3), spaceBefore=6, spaceAfter=6),
+    "part": ParagraphStyle("part", fontName="Helvetica-Bold", fontSize=9, leading=11, textColor=ACCENT, spaceBefore=8, spaceAfter=6),
+    "box_title": ParagraphStyle("box_title", fontName="Helvetica-Bold", fontSize=7.5, leading=9, textColor=ACCENT, spaceAfter=4),
+    "index_section": ParagraphStyle("index_section", fontName="Helvetica-Bold", fontSize=6.5, leading=8, textColor=ACCENT),
+    "index_item": ParagraphStyle("index_item", fontName="Times-Roman", fontSize=7.6, leading=9.2, textColor=INK),
+    "index_page": ParagraphStyle("index_page", fontName="Helvetica-Bold", fontSize=7, leading=9.2, textColor=ACCENT, alignment=TA_RIGHT),
+    "note": ParagraphStyle("note", fontName="Helvetica", fontSize=6.3, leading=8, textColor=MUTED),
     "cite": ParagraphStyle("cite", fontName="Helvetica", fontSize=6.3, leading=7.8, textColor=MUTED),
-    "part": ParagraphStyle("part", fontName="Helvetica-Bold", fontSize=8.5, leading=10, textColor=ACCENT, spaceBefore=6, spaceAfter=4),
-    "quiz_q": ParagraphStyle("quiz_q", fontName="Times-Bold", fontSize=9, leading=11, textColor=INK, spaceBefore=4),
-    "quiz_o": ParagraphStyle("quiz_o", fontName="Times-Roman", fontSize=8.5, leading=10.5, textColor=INK, leftIndent=8),
     "credit": ParagraphStyle("credit", fontName="Helvetica", fontSize=5.5, leading=7, textColor=MUTED, spaceAfter=3),
     "footer": ParagraphStyle("footer", fontName="Helvetica", fontSize=6.5, leading=8, textColor=MUTED, alignment=TA_CENTER),
 }
 
 
+def _plain(text) -> str:
+    """Only characters the built-in PDF fonts can draw (others would print as black boxes)."""
+    return str(text or "").encode("cp1252", errors="ignore").decode("cp1252").strip()
+
+
 def _t(text) -> str:
     """Escape text for ReportLab's mini-markup."""
-    return escape(str(text or ""))
+    return escape(_plain(text))
 
 
 def _link(url: str, text: str) -> str:
     return f'<link href="{escape(url, {chr(34): "&quot;"})}">{text}</link>' if url else text
+
+
+def link_of(a: dict) -> str:
+    """Straight to the publisher when we know it, else the feed link."""
+    return a.get("publisher_url") or a.get("url", "")
+
+
+def source_of(a: dict) -> str:
+    """The publisher's name as it can be printed (falls back to its site)."""
+    name = _plain(a.get("source_name"))
+    if name:
+        return name
+    host = urlsplit(link_of(a)).netloc.removeprefix("www.")
+    return host if host and host != "news.google.com" else "Source"
 
 
 def reading_order(edition: dict) -> list[dict]:
@@ -116,32 +144,71 @@ def _column_rules(c, top, bottom=MARGIN + 14):
         c.line(x, bottom, x, top)
 
 
+def _vale_mark(c, x, y, size):
+    """The Vale tile: a white V with a blue line under it, on slate."""
+    k = size / 64
+    c.setFillColor(INK)
+    c.roundRect(x, y, size, size, 14 * k, stroke=0, fill=1)
+    c.setStrokeColor(colors.white)
+    c.setLineWidth(7 * k)
+    c.setLineCap(1)
+    c.setLineJoin(1)
+    path = c.beginPath()
+    path.moveTo(x + 18 * k, y + size - 15 * k)
+    path.lineTo(x + 32 * k, y + size - 45 * k)
+    path.lineTo(x + 46 * k, y + size - 15 * k)
+    c.drawPath(path, stroke=1, fill=0)
+    c.setFillColor(SKY)
+    c.roundRect(x + 17 * k, y + size - 54 * k, 30 * k, 4 * k, 2 * k, stroke=0, fill=1)
+
+
 def _footer(c, doc, meta):
     c.setFont("Helvetica", 6.5)
     c.setFillColor(MUTED)
-    c.drawCentredString(PAGE_W / 2, MARGIN - 6, f"{meta['title']}  ·  Edition No. {meta['number']}  ·  page {doc.page}  ·  printed by {BRAND}")
+    c.drawCentredString(PAGE_W / 2, MARGIN - 6,
+                        f"{meta['title']}  ·  Edition No. {meta['number']}  ·  page {doc.page}  ·  {meta['printed_for']}")
 
 
-def _first_page(c, doc, meta):
+def _cover_page(c, doc, meta):
     c.saveState()
     top = PAGE_H - MARGIN
-    _double_rule(c, top)
-    # Fit the title to the page width.
-    size = 44
-    width = PAGE_W - 2 * MARGIN
-    while size > 18 and stringWidth(meta["title"], "Times-Bold", size) > width:
+    # Brand strip: the Vale mark and name on the left, who it's printed for on the right.
+    _vale_mark(c, MARGIN, top - 24, 24)
+    c.setFillColor(INK)
+    c.setFont("Times-Bold", 17)
+    c.drawString(MARGIN + 31, top - 15, BRAND)
+    v_w = stringWidth("V", "Times-Bold", 17)
+    c.setFillColor(ACCENT)
+    c.rect(MARGIN + 31, top - 19, v_w, 1.6, stroke=0, fill=1)  # the blue line under the V
+    c.setFillColor(MUTED)
+    c.setFont("Helvetica", 6.5)
+    c.drawString(MARGIN + 31, top - 26, TAGLINE)
+    c.setFont("Helvetica-Bold", 7)
+    c.setFillColor(INK)
+    c.drawRightString(PAGE_W - MARGIN, top - 11, meta["printed_for"].upper())
+    c.setFont("Helvetica", 7)
+    c.setFillColor(MUTED)
+    c.drawRightString(PAGE_W - MARGIN, top - 21, meta["count_line"].upper())
+    c.setFillColor(ACCENT)
+    c.rect(MARGIN, top - 34, FULL_W, 2.2, stroke=0, fill=1)
+
+    # Masthead: the reader's own paper name between double rules.
+    head_top = top - 44
+    _double_rule(c, head_top)
+    size = 50
+    while size > 18 and stringWidth(meta["title"], "Times-Bold", size) > FULL_W:
         size -= 1
     c.setFillColor(INK)
     c.setFont("Times-Bold", size)
-    c.drawCentredString(PAGE_W / 2, top - 14 - size * 0.8, meta["title"])
-    meta_y = top - MASTHEAD_H + 22
+    c.drawCentredString(PAGE_W / 2, head_top - 12 - size * 0.78, meta["title"])
+    meta_y = top - COVER_HEAD_H + 18
     c.setLineWidth(0.6)
+    c.setStrokeColor(INK)
     c.line(MARGIN, meta_y + 11, PAGE_W - MARGIN, meta_y + 11)
     c.setFont("Helvetica", 7)
     c.setFillColor(MUTED)
     c.drawCentredString(PAGE_W / 2, meta_y + 2, meta["line"].upper())
-    _double_rule(c, top - MASTHEAD_H + 12)
-    _column_rules(c, top - MASTHEAD_H - TAKEAWAYS_H - 4)
+    _double_rule(c, top - COVER_HEAD_H + 10)
     _footer(c, doc, meta)
     c.restoreState()
 
@@ -149,9 +216,10 @@ def _first_page(c, doc, meta):
 def _later_page(c, doc, meta):
     c.saveState()
     top = PAGE_H - MARGIN
+    _vale_mark(c, MARGIN, top - 14, 14)
     c.setFont("Times-Bold", 11)
     c.setFillColor(INK)
-    c.drawString(MARGIN, top - 11, meta["title"])
+    c.drawString(MARGIN + 20, top - 11, meta["title"])
     c.setFont("Helvetica", 7)
     c.setFillColor(MUTED)
     c.drawRightString(PAGE_W - MARGIN, top - 10, meta["line"].upper())
@@ -161,61 +229,54 @@ def _later_page(c, doc, meta):
     c.restoreState()
 
 
-# ---------- content ----------
+# ---------- pieces ----------
 
-def _takeaways_box(edition: dict, urls: dict) -> Table | None:
-    if not edition.get("three_takeaways"):
-        return None
-    cells = []
-    for i, t in enumerate(edition.get("three_takeaways", [])[:3], start=1):
-        text = _link(urls.get(t["article_id"], ""), _t(t["text"]))
-        cells += [Paragraph(str(i), STYLES["box_num"]), Paragraph(text, STYLES["box_body"])]
-    inner_w = PAGE_W - 2 * MARGIN - 12
-    num_w = 20
-    text_w = (inner_w - 3 * num_w) / 3
-    grid = Table([cells], colWidths=[num_w, text_w] * (len(cells) // 2) or [inner_w])
-    grid.setStyle(TableStyle([
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 3),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        *[("LINEAFTER", (c, 0), (c, 0), 0.5, RULE) for c in (1, 3) if c < len(cells) - 1],
-    ]))
-    box = Table(
-        [[Paragraph("3 THINGS YOU LEARNED TODAY", STYLES["box_title"])], [grid]],
-        colWidths=[PAGE_W - 2 * MARGIN],
-    )
-    box.setStyle(TableStyle([
-        ("BOX", (0, 0), (-1, -1), 1.2, INK),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (0, 0), 6),
-        ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
-    ]))
-    return box
-
-
-PHOTOS_IN_PDF = 12  # every story (a paper has 10)
-
-
-def link_of(a: dict) -> str:
-    """Straight to the publisher when we know it, else the feed link."""
-    return a.get("publisher_url") or a.get("url", "")
-
-
-def _photo(data: bytes, lead: bool):
-    jpeg = images.to_jpeg(data, max_width=700)  # keeps the PDF light
-    if not jpeg:
-        return None
-    from PIL import Image as PILImage
-
-    w, h = PILImage.open(jpeg).size
-    jpeg.seek(0)
-    width = COL_W
-    height = min(width * h / w, 190 if lead else 130)
-    width = height * w / h  # keep the aspect ratio if the height was capped
-    return Image(jpeg, width=width, height=height)
-
-
+PHOTOS_IN_PDF = 20  # every story in a 20-story paper
 QR_SIZE = 44  # points; scans easily from a printed page
+
+
+class _PageMark(Flowable):
+    """Invisible marker that records which page a story landed on (for the cover index)."""
+
+    def __init__(self, key: str, pages: dict):
+        super().__init__()
+        self.key, self.pages = key, pages
+        self.width = self.height = 0
+
+    def wrap(self, *args):
+        return 0, 0
+
+    def draw(self):
+        self.pages[self.key] = self.canv.getPageNumber()
+
+
+_crops: dict = {}
+
+
+def _photo(jpeg: bytes, width: float, height: float):
+    """The photo cropped from its centre to exactly width x height, like a newspaper picture box."""
+    key = (hash(jpeg), round(width), round(height))
+    if key not in _crops:
+        from PIL import Image as PILImage
+
+        img = PILImage.open(BytesIO(jpeg))
+        w, h = img.size
+        target = width / height
+        if w / h > target:  # too wide: trim the sides
+            new_w = int(h * target)
+            img = img.crop(((w - new_w) // 2, 0, (w + new_w) // 2, h))
+        else:  # too tall: trim top and bottom, keeping a little more of the top (faces, headlines)
+            new_h = int(w / target)
+            top = int((h - new_h) * 0.35)
+            img = img.crop((0, top, w, top + new_h))
+        out = BytesIO()
+        img.convert("RGB").save(out, "JPEG", quality=82, optimize=True)
+        _crops[key] = out.getvalue()
+        if len(_crops) > 200:
+            _crops.pop(next(iter(_crops)))
+    picture = Image(BytesIO(_crops[key]), width=width, height=height)
+    picture.hAlign = "LEFT"
+    return picture
 
 
 def _qr(url: str, size: float = QR_SIZE) -> Drawing:
@@ -230,17 +291,19 @@ def _qr(url: str, size: float = QR_SIZE) -> Drawing:
 def short_link(url: str, limit: int = 38) -> str:
     """reuters.com/technology/… — readable in print."""
     parts = urlsplit(url)
+    if parts.netloc == "news.google.com":
+        return "Original article (via Google News)"
     text = (parts.netloc.removeprefix("www.") + parts.path).rstrip("/")
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def _citation(a: dict) -> Table:
+def _citation(a: dict, width: float = COL_W) -> Table:
     """QR code + printed citation: source, date and a short link to the original."""
     url = link_of(a)
     when = (a.get("published_at") or "")[:10]
-    words = (f"<b>Scan for the original</b><br/>{_t(a.get('source_name'))}"
+    words = (f"<b>Scan for the original</b><br/>{_t(source_of(a))}"
              + (f" · {when}" if when else "") + f"<br/>{_link(url, _t(short_link(url)))}")
-    table = Table([[_qr(url), Paragraph(words, STYLES["cite"])]], colWidths=[QR_SIZE + 4, COL_W - QR_SIZE - 4])
+    table = Table([[_qr(url), Paragraph(words, STYLES["cite"])]], colWidths=[QR_SIZE + 4, width - QR_SIZE - 4], hAlign="LEFT")
     table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
@@ -251,139 +314,211 @@ def _citation(a: dict) -> Table:
     return table
 
 
-def _story(a: dict, lead: bool, section: str | None = None, photo=None) -> KeepTogether:
-    # Regular stories sit under their section header, so only the lead and special stories get a kicker.
-    kicker = None
-    if a.get("is_explore"):
-        kicker = f'<font color="#1D4ED8">{_t(a.get("label") or "Something new").upper()}</font>'
-    elif lead:
-        kicker = f'<font color="#1D4ED8">{_t(a["topic"]).upper()}  ·  LEAD STORY</font>'
-    elif a.get("swapped"):
-        kicker = "EDITOR'S SWAP"
+def _credit(a: dict) -> Paragraph:
+    return Paragraph(_t(a.get("image_credit") or f"Photo: {source_of(a)}"), STYLES["credit"])
+
+
+def _story(a: dict, pages: dict, section: str | None = None, jpeg: bytes | None = None) -> KeepTogether:
     # A section header travels with its first story so it is never stranded at a column foot.
-    parts = [Paragraph(_t(section).upper(), STYLES["section"])] if section else []
-    parts += [Paragraph(kicker, STYLES["kicker"])] if kicker else []
-    if photo is not None:
-        parts += [photo, Paragraph(_t(a.get("image_credit") or f"Photo: {a.get('source_name')}"), STYLES["credit"])]
+    parts = [_PageMark(a["id"], pages)]
+    parts += [Paragraph(f"&nbsp;{_t(section).upper()}&nbsp;", STYLES["section"])] if section else []
+    if a.get("is_explore"):
+        parts.append(Paragraph(_t(a.get("label") or "Something new").upper(), STYLES["kicker"]))
+    elif a.get("swapped"):
+        parts.append(Paragraph("EDITOR'S SWAP", STYLES["kicker"]))
+    if jpeg:
+        parts += [_photo(jpeg, COL_W, COL_W * 2 / 3), _credit(a)]
     parts += [
-        Paragraph(_link(link_of(a), _t(a["headline"])), STYLES["lead" if lead else "headline"]),
+        Paragraph(_link(link_of(a), _t(a["headline"])), STYLES["headline"]),
         Paragraph(_t(a.get("summary")), STYLES["body"]),
     ]
     if a.get("why_it_matters"):
         parts.append(Paragraph(f"Why it matters to you: {_t(a['why_it_matters'])}", STYLES["why"]))
-    parts.append(_citation(a))
-    parts.append(Spacer(1, 9))
+    parts += [_citation(a), Spacer(1, 10)]
     return KeepTogether(parts)
 
 
-def _side_boxes(edition: dict) -> list:
-    flow = []
-    dots = edition.get("connect_the_dots") or {}
-    vitamin = edition.get("mind_vitamin") or {}
-    for kicker, title, body in [
-        ("EDITOR'S NOTE", "Connect the Dots", dots.get("text")),
-        ("MORNING MIND VITAMIN", vitamin.get("title"), vitamin.get("content")),
-    ]:
-        if not body:
-            continue
-        box = Table(
-            [[Paragraph(kicker, STYLES["kicker"])], [Paragraph(_t(title), STYLES["side_title"])], [Paragraph(_t(body), STYLES["body"])]],
-            colWidths=[COL_W],
-        )
-        box.setStyle(TableStyle([
-            ("LINEABOVE", (0, 0), (-1, 0), 1.4, INK),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 0),
-        ]))
-        flow += [KeepTogether([box]), Spacer(1, 10)]
-    return flow
+def _cover_lead(a: dict, pages: dict, jpeg: bytes | None) -> list:
+    flow = [_PageMark(a["id"], pages), Spacer(1, 4)]
+    if jpeg:
+        flow += [_photo(jpeg, FULL_W, 158), _credit(a)]
+    flow += [
+        Paragraph(f"{_t(a['topic']).upper()}  ·  TODAY'S LEAD STORY", STYLES["cover_kicker"]),
+        Paragraph(_link(link_of(a), _t(a["headline"])), STYLES["cover_lead"]),
+    ]
+    words = [Paragraph(_t(a.get("summary")), STYLES["cover_body"])]
+    if a.get("why_it_matters"):
+        words.append(Paragraph(f"Why it matters to you: {_t(a['why_it_matters'])}", STYLES["cover_why"]))
+    cite_w = 170
+    body = Table([[words, _citation(a, cite_w)]], colWidths=[FULL_W - cite_w - 16, cite_w + 16], hAlign="LEFT")
+    body.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (0, 0), 16),
+        ("RIGHTPADDING", (1, 0), (1, 0), 0),
+        ("LINEBEFORE", (1, 0), (1, 0), 0.6, RULE),
+        ("LEFTPADDING", (1, 0), (1, 0), 10),
+    ]))
+    return flow + [body, Spacer(1, 12)]
 
 
-def _brain_check(edition: dict, stories: list[dict]) -> list:
-    """The day's Brain-check questions, printed, with the answers in small type at the end."""
-    live = {a["id"] for a in stories}
-    questions = [q for q in edition.get("recall_quiz", []) if q.get("article_id") in live and len(q.get("options", [])) == 3]
-    if not questions:
-        return []
-    flow = [Paragraph("BRAIN CHECK", STYLES["section"])]
-    answers = []
-    for n, q in enumerate(questions, start=1):
-        flow.append(Paragraph(f"{n}. {_t(q['question'])}", STYLES["quiz_q"]))
-        for letter, option in zip("ABC", q["options"]):
-            flow.append(Paragraph(f"{letter}) {_t(option)}", STYLES["quiz_o"]))
-        answers.append(f"{n}-{'ABC'[q['answer_index']]}")
-    flow += [Spacer(1, 4), Paragraph("Answers: " + "  ".join(answers), STYLES["cite"]), Spacer(1, 10)]
-    return flow
+INDEX_CHARS = 40  # one line per story in the cover index
 
 
-def build_pdf(edition: dict, paper_title: str, compress: bool = True, fetch_image=None) -> bytes:
+def _index(stories: list[dict], pages: dict, width: float) -> Table:
+    """'Inside today': every other story by section, with the page it's on."""
+    rows = []
+    section = None
+    for a in stories:
+        if a["topic"] != section:
+            section = a["topic"]
+            rows.append([Paragraph(_t(section).upper(), STYLES["index_section"]), ""])
+        headline = _plain(a["headline"])
+        headline = headline if len(headline) <= INDEX_CHARS else headline[: INDEX_CHARS - 1].rstrip() + "…"
+        rows.append([Paragraph(escape(headline), STYLES["index_item"]), Paragraph(f"p.{pages.get(a['id'], '')}", STYLES["index_page"])])
+    half = (len(rows) + 1) // 2
+    left, right = rows[:half], rows[half:]
+    right += [["", ""]] * (len(left) - len(right))
+    col = (width - 12) / 2
+    grid = Table([l + [""] + r for l, r in zip(left, right)], colWidths=[col - 22, 22, 12, col - 22, 22], hAlign="LEFT")
+    grid.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 0.5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0.5),
+    ]))
+    return Table([[Paragraph("INSIDE TODAY", STYLES["box_title"])], [grid]], colWidths=[width], hAlign="LEFT",
+                 style=TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                                   ("LINEABOVE", (0, 0), (-1, 0), 1.4, INK), ("TOPPADDING", (0, 0), (0, 0), 5)]))
+
+
+def interest_rows(weights: dict | None, limit: int = 6) -> list[tuple[str, float]]:
+    """The reader's strongest interests, biggest first."""
+    return sorted(((t, w) for t, w in (weights or {}).items() if w > 0), key=lambda tw: -tw[1])[:limit]
+
+
+def _interests(weights: dict | None, width: float) -> Table | None:
+    """'What Vale has learned about you': a small bar chart of the reader's topics."""
+    rows = interest_rows(weights)
+    if not rows:
+        return None
+    bar_h, gap, label_w, num_w = 8, 6, 78, 16
+    height = len(rows) * (bar_h + gap)
+    chart = Drawing(width, height)
+    top_weight = rows[0][1]
+    track = width - label_w - num_w
+    for i, (topic, weight) in enumerate(rows):
+        y = height - (i + 1) * (bar_h + gap) + gap / 2
+        label = _plain(topic)
+        while label and stringWidth(label, "Helvetica", 7) > label_w - 4:
+            label = label[:-2] + "…" if len(label) > 2 else ""
+        chart.add(String(0, y + 1, label, fontName="Helvetica", fontSize=7, fillColor=INK))
+        chart.add(Rect(label_w, y, track, bar_h, fillColor=SOFT, strokeColor=None))
+        chart.add(Rect(label_w, y, max(4, track * weight / top_weight), bar_h, fillColor=ACCENT, strokeColor=None))
+        chart.add(String(width, y + 1, f"{weight:g}", fontName="Helvetica-Bold", fontSize=7, fillColor=ACCENT, textAnchor="end"))
+    return Table(
+        [[Paragraph("WHAT VALE HAS LEARNED ABOUT YOU", STYLES["box_title"])], [chart],
+         [Paragraph("Every story you read, like or skip tunes tomorrow's paper. This chart is yours alone.", STYLES["note"])]],
+        colWidths=[width], hAlign="LEFT",
+        style=TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                          ("LINEABOVE", (0, 0), (-1, 0), 1.4, INK), ("TOPPADDING", (0, 0), (0, 0), 5),
+                          ("TOPPADDING", (0, 2), (0, 2), 4)]),
+    )
+
+
+# ---------- the paper ----------
+
+def build_pdf(edition: dict, paper_title: str, compress: bool = True, fetch_image=None,
+              weights: dict | None = None, reader: str | None = None) -> bytes:
     """Render the edition to PDF bytes. fetch_image(url) -> bytes is replaceable for tests."""
     fetch_image = fetch_image or images.fetch_image
     stories = reading_order(edition)
-    urls = {a["id"]: link_of(a) for a in edition["articles"]}
     with_photo = [a for a in stories if a.get("image_url")][:PHOTOS_IN_PDF]
+
     def load(a):
         # Stored pictures come from disk; older editions may still point at the web.
         if photos.is_local(a["image_url"]):
-            return photos.read_local(a["image_url"])
-        return fetch_image(a["image_url"])
+            data = photos.read_local(a["image_url"])
+        else:
+            data = fetch_image(a["image_url"])
+        jpeg = images.to_jpeg(data, max_width=800) if data else None  # keeps the PDF light
+        return jpeg.getvalue() if jpeg else None
 
     with ThreadPoolExecutor(max_workers=4) as pool:
-        raw = dict(zip([a["id"] for a in with_photo], pool.map(load, with_photo)))
+        jpegs = dict(zip([a["id"] for a in with_photo], pool.map(load, with_photo)))
+
     minutes = edition.get("reading_minutes")
+    name = _plain(reader)
     meta = {
-        "title": (paper_title or BRAND).upper(),
+        "title": _plain(paper_title or BRAND).upper() or BRAND.upper(),
         "number": edition.get("edition_number"),
+        "printed_for": f"Printed for {name} by {BRAND}" if name else f"Printed by {BRAND}",
+        "count_line": "  ·  ".join(filter(None, [f"{len(stories)} stories", f"{minutes} min read" if minutes else None])),
         "line": "  ·  ".join(filter(None, [
             "Vol. 1",
             f"Edition No. {edition.get('edition_number')}",
             _long_date(edition["date"]) if edition.get("date") else None,
-            f"Today's paper: {minutes} min" if minutes else None,
         ])),
     }
 
-    buf = BytesIO()
-    doc = BaseDocTemplate(
-        buf, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN, topMargin=MARGIN, bottomMargin=MARGIN,
-        title=f"{meta['title']} — Edition No. {meta['number']}", author=BRAND,
-        pageCompression=1 if compress else 0,
-    )
-
-    def columns(top: float, prefix: str) -> list[Frame]:
-        return [
-            Frame(MARGIN + i * (COL_W + GUTTER), MARGIN + 14, COL_W, top - MARGIN - 14,
-                  leftPadding=0, rightPadding=0, topPadding=4, bottomPadding=0, id=f"{prefix}{i}")
+    def render(pages: dict) -> bytes:
+        buf = BytesIO()
+        doc = BaseDocTemplate(
+            buf, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN, topMargin=MARGIN, bottomMargin=MARGIN,
+            title=f"{meta['title']} — Edition No. {meta['number']}", author=BRAND,
+            pageCompression=1 if compress else 0,
+        )
+        cover_h = PAGE_H - 2 * MARGIN - COVER_HEAD_H - 14
+        cover = Frame(MARGIN, MARGIN + 14, FULL_W, cover_h, leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0, id="cover")
+        later_top = PAGE_H - MARGIN - RUNNING_HEAD_H
+        columns = [
+            Frame(MARGIN + i * (COL_W + GUTTER), MARGIN + 14, COL_W, later_top - MARGIN - 14,
+                  leftPadding=0, rightPadding=0, topPadding=4, bottomPadding=0, id=f"l{i}")
             for i in range(COLS)
         ]
+        doc.addPageTemplates([
+            PageTemplate("cover", [cover], onPage=lambda c, d: _cover_page(c, d, meta)),
+            PageTemplate("later", columns, onPage=lambda c, d: _later_page(c, d, meta)),
+        ])
 
-    first_top = PAGE_H - MARGIN - MASTHEAD_H
-    takeaways_frame = Frame(MARGIN, first_top - TAKEAWAYS_H, PAGE_W - 2 * MARGIN, TAKEAWAYS_H,
-                            leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=8, id="takeaways")
-    doc.addPageTemplates([
-        PageTemplate("first", [takeaways_frame, *columns(first_top - TAKEAWAYS_H - 4, "c")],
-                     onPage=lambda c, d: _first_page(c, d, meta)),
-        PageTemplate("later", columns(PAGE_H - MARGIN - RUNNING_HEAD_H, "l"),
-                     onPage=lambda c, d: _later_page(c, d, meta)),
-    ])
+        flow = [NextPageTemplate("later")]
+        if stories:
+            lead, rest = stories[0], stories[1:]
+            front = _cover_lead(lead, pages, jpegs.get(lead["id"]))
+            chart_w = 170
+            interests = _interests(weights, chart_w)
+            index_w = FULL_W - (chart_w + 18 if interests else 0)
+            boxes = [_index(rest, pages, index_w)] if rest else []
+            if interests:
+                boxes.append(interests)
+            if boxes:
+                # Index on the left, interests chart on the right, 18pt apart.
+                row = Table([boxes], colWidths=[index_w + 18, chart_w] if len(boxes) == 2 else [FULL_W], hAlign="LEFT")
+                row.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                                         ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                                         *([("RIGHTPADDING", (0, 0), (0, 0), 18)] if len(boxes) == 2 else [])]))
+                front.append(row)
+            flow.append(KeepInFrame(FULL_W, cover_h, front, mode="shrink"))
+            flow.append(FrameBreak())
 
-    box = _takeaways_box(edition, urls)
-    flow = [NextPageTemplate("later"), *([box] if box else []), FrameBreak()]
-    current_section = None
-    for i, a in enumerate(stories):
-        header = None
-        if a.get("part", 1) == 2 and (i == 0 or stories[i - 1].get("part", 1) != 2):
-            flow.append(Paragraph("MORE FOR YOU · PART 2", STYLES["part"]))
-            current_section = None  # repeat the section header inside part 2
-        if i > 0 and a["topic"] != current_section:
-            current_section = header = a["topic"]
-        photo = _photo(raw[a["id"]], lead=(i == 0)) if raw.get(a["id"]) else None
-        flow.append(_story(a, lead=(i == 0), section=header, photo=photo))
-    flow += _side_boxes(edition)
-    flow += _brain_check(edition, stories)
-    flow.append(Paragraph(f"Every headline links to the original article. Printed by {BRAND}.", STYLES["footer"]))
+            section = None
+            for i, a in enumerate(rest):
+                if a.get("part", 1) == 2 and (i == 0 or rest[i - 1].get("part", 1) != 2):
+                    flow.append(Paragraph("MORE FOR YOU · PART 2", STYLES["part"]))
+                    section = None  # repeat the section header inside part 2
+                header = a["topic"] if a["topic"] != section else None
+                section = a["topic"]
+                flow.append(_story(a, pages, section=header, jpeg=jpegs.get(a["id"])))
+        flow.append(Spacer(1, 6))
+        flow.append(Paragraph(f"Every headline links to the original article. Printed by {BRAND}.", STYLES["footer"]))
+        doc.build(flow)
+        return buf.getvalue()
 
-    doc.build(flow)
-    return buf.getvalue()
+    # Two passes: the first finds the page each story lands on, the second prints the index.
+    pages: dict = {}
+    render(pages)
+    return render(dict(pages))
 
 
 def filename_for(edition: dict, paper_title: str) -> str:

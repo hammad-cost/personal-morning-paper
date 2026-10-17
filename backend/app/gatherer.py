@@ -89,6 +89,7 @@ def parse_feed(content: bytes, topic: str, default_source: str = "") -> list[dic
     """Turn RSS bytes into article dicts. Google News titles look like 'Headline - Source'."""
     feed = feedparser.parse(content)
     feed_source = default_source or clean_text(feed.feed.get("title", ""))
+    feed_site = feed.feed.get("link", "")
     articles = []
     for entry in feed.entries:
         url = entry.get("link", "").strip()
@@ -97,6 +98,7 @@ def parse_feed(content: bytes, topic: str, default_source: str = "") -> list[dic
         if not url or not title or not published:
             continue
         source = clean_text((entry.get("source") or {}).get("title", "")) or feed_source
+        source_url = (entry.get("source") or {}).get("href") or feed_site
         suffix = f" - {source}"
         if source and title.endswith(suffix):
             title = title[: -len(suffix)].strip()
@@ -113,6 +115,7 @@ def parse_feed(content: bytes, topic: str, default_source: str = "") -> list[dic
                 "headline": title,
                 "text": text[:MAX_TEXT],
                 "source_name": source,
+                "source_url": source_url,
                 "url": url,
                 "published_at": published.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "image_url": rss_image(entry),

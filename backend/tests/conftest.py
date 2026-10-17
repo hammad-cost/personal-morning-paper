@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app import ai_editor, auth, editions, gatherer, images, mailer, photos, store
+from app import ai_editor, auth, editions, gatherer, images, logos, mailer, photos, store
 from app import main
 from app.main import app
 
@@ -37,6 +37,8 @@ def no_network(monkeypatch):
     monkeypatch.setattr(images, "fetch_image", lambda url: None)
     monkeypatch.setattr(photos, "wiki_search", blocked)
     monkeypatch.setattr(mailer, "send_via_brevo", blocked)
+    monkeypatch.setattr(logos, "fetch", blocked)
+    logos.clear_cache()
     monkeypatch.setenv("LINK_SECRET", "test-link-secret")
     images.clear_cache()
     photos._topic_cache.clear()

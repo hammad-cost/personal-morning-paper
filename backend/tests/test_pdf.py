@@ -43,17 +43,47 @@ def links_of(data: bytes) -> list[str]:
     return uris
 
 
-def test_builds_a_pdf_with_masthead_edition_number_and_takeaways():
-    data = pdf.build_pdf(make_edition(), "The Ayesha Chronicle")
+def test_builds_a_newspaper_with_a_branded_cover():
+    data = pdf.build_pdf(make_edition(), "The Ayesha Chronicle", weights={"AI Agents": 12, "Space": 4, "Sport": -3}, reader="Ayesha")
     assert data.startswith(b"%PDF")
-    text = text_of(data)
-    assert "THE AYESHA CHRONICLE" in text
-    assert "EDITION NO. 2" in text
-    assert "SATURDAY, OCTOBER 17, 2026" in text
-    assert "3 THINGS YOU LEARNED TODAY" in text
-    assert "Takeaway 1" in text and "&" in text  # markup characters are escaped, not dropped
-    assert "Connect the Dots" in text and "Read slowly" in text
-    assert "Printed by Vale" in " ".join(text.split())  # the footer may wrap
+    cover = " ".join(PdfReader(BytesIO(data)).pages[0].extract_text().split())
+    assert "Vale" in cover and "One calm paper a day" in cover
+    assert "PRINTED FOR AYESHA BY VALE" in cover
+    assert "THE AYESHA CHRONICLE" in cover
+    assert "EDITION NO. 2" in cover and "SATURDAY, OCTOBER 17, 2026" in cover
+    assert "TODAY'S LEAD STORY" in cover and "Headline number 1" in cover
+    assert "INSIDE TODAY" in cover
+    assert "WHAT VALE HAS LEARNED ABOUT YOU" in cover and "AI Agents" in cover
+    text = " ".join(text_of(data).split())
+    # A newspaper, not a study sheet.
+    for gone in ["3 THINGS YOU LEARNED TODAY", "Takeaway 1", "BRAIN CHECK", "Connect the Dots", "Read slowly"]:
+        assert gone not in text
+    assert "Printed by Vale" in text
+
+
+def test_cover_index_lists_every_other_story_with_its_page():
+    ed = make_edition(n_articles=10, summary_words=120)
+    data = pdf.build_pdf(ed, "T")
+    reader = PdfReader(BytesIO(data))
+    cover = " ".join(reader.pages[0].extract_text().split())
+    for a in pdf.reading_order(ed)[1:]:
+        page = next(i for i, p in enumerate(reader.pages, start=1) if a["headline"] in " ".join(p.extract_text().split()) and i > 1)
+        assert f"{a['headline']} p.{page}" in cover
+
+
+def test_interests_chart_shows_strongest_positive_topics_only():
+    assert pdf.interest_rows({"AI": 10, "Space": 3, "Sport": -4, "Cats": 0}) == [("AI", 10), ("Space", 3)]
+    text = text_of(pdf.build_pdf(make_edition(), "T", weights={}))
+    assert "WHAT VALE HAS LEARNED" not in text  # nothing learned yet, no empty chart
+
+
+def test_text_the_pdf_fonts_cannot_draw_is_dropped_not_boxed():
+    ed = make_edition()
+    ed["articles"][1]["source_name"] = "दैनिक"  # Hindi: no glyphs in the PDF fonts
+    ed["articles"][1]["url"] = "https://www.bhaskar.com/news/1"
+    text = " ".join(text_of(pdf.build_pdf(ed, "T")).split())
+    assert "bhaskar.com" in text and "■" not in text
+    assert pdf._plain("Café “quoted” – दै") == "Café “quoted” –"
 
 
 def test_skipped_stories_are_left_out():
@@ -62,11 +92,11 @@ def test_skipped_stories_are_left_out():
     assert "Skipped celebrity gossip story" not in text
 
 
-def test_headlines_and_takeaways_are_live_links():
+def test_headlines_and_citations_are_live_links():
     links = links_of(pdf.build_pdf(make_edition(), "The Ayesha Chronicle"))
     assert "https://news.test/story/1" in links
     assert "https://news.test/story/3" not in links  # skipped
-    assert links.count("https://news.test/story/2") >= 2  # headline + "Read original" (+ takeaway)
+    assert links.count("https://news.test/story/2") >= 2  # headline + citation link
 
 
 def test_reading_order_matches_the_web_page():
@@ -122,16 +152,11 @@ def test_short_links_read_well_in_print():
     assert long.endswith("…") and len(long) == 38
 
 
-def test_part_two_banner_and_printed_brain_check():
+def test_part_two_banner_and_no_printed_quiz():
     ed = make_edition(n_articles=8)
     for a in ed["articles"][4:]:
         a["part"] = 2
-    ed["recall_quiz"] = [
-        {"question": "Which outlet?", "options": ["One", "Two", "Three"], "answer_index": 1, "article_id": "a1"},
-        {"question": "Skipped story?", "options": ["x", "y", "z"], "answer_index": 0, "article_id": "a3"},  # a3 skipped
-    ]
+    ed["recall_quiz"] = [{"question": "Which outlet?", "options": ["One", "Two", "Three"], "answer_index": 1, "article_id": "a1"}]
     text = " ".join(text_of(pdf.build_pdf(ed, "T")).split())
     assert "MORE FOR YOU · PART 2" in text
-    assert "BRAIN CHECK" in text and "1. Which outlet?" in text and "B) Two" in text
-    assert "Answers: 1-B" in text
-    assert "Skipped story?" not in text  # questions about skipped stories are left out
+    assert "Which outlet?" not in text and "BRAIN CHECK" not in text

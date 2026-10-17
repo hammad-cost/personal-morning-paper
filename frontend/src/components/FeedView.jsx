@@ -1,7 +1,7 @@
 import { ArrowUpRight, Heart, HelpCircle, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import RecallCheck from './RecallCheck'
-import { articleLink, SkippedNotice, WhyThisStory } from './StoryCard'
+import { articleLink, Citation, SkippedNotice, WhyThisStory } from './StoryCard'
 import ThreeTakeaways, { storyAnchor } from './ThreeTakeaways'
 
 // Instagram-style home feed for today's paper — but finite: 10 posts, then
@@ -53,6 +53,43 @@ function StoryCircles({ circles, seenSections }) {
 
 // ---------- one post ----------
 
+// The publisher's site, for its logo: saved with the story, else read from its links.
+export function sourceDomain(article) {
+  if (article.source_domain) return article.source_domain
+  for (const url of [article.publisher_url, article.url]) {
+    try {
+      const host = new URL(url).hostname.replace(/^www\./, '')
+      if (host && host !== 'news.google.com') return host
+    } catch {
+      // not a URL
+    }
+  }
+  return null
+}
+
+// Profile picture: the publisher's real logo, or their initial if no logo exists.
+function SourceAvatar({ article }) {
+  const domain = sourceDomain(article)
+  const [failed, setFailed] = useState(false)
+  return (
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-sky-400 p-[2px]" aria-hidden="true">
+      {domain && !failed ? (
+        <img
+          src={`/api/logos/${domain}`}
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="size-full rounded-full border-2 border-card bg-white object-contain p-0.5"
+        />
+      ) : (
+        <span className="flex size-full items-center justify-center rounded-full border-2 border-card bg-ink font-headline text-sm font-black text-white">
+          {(article.source_name || '?')[0]}
+        </span>
+      )}
+    </span>
+  )
+}
+
 function FeedPost({ article, weight, sectionStart, skipState, onSkip, onUndo, onReadOriginal, onLike, observe }) {
   const [showWhy, setShowWhy] = useState(false)
   const [heart, setHeart] = useState(false)
@@ -95,11 +132,7 @@ function FeedPost({ article, weight, sectionStart, skipState, onSkip, onUndo, on
         </h2>
       )}
       <header className="flex items-center gap-2 px-4 py-3">
-        <span className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-accent to-ink p-[2px]" aria-hidden="true">
-          <span className="flex size-full items-center justify-center rounded-full bg-card font-headline text-sm font-black">
-          {(article.source_name || '?')[0]}
-          </span>
-        </span>
+        <SourceAvatar article={article} />
         <span className="min-w-0 flex-1 truncate text-sm">
           <span className="font-semibold">{article.source_name}</span>
           <span className="text-xs text-ink-muted"> · {article.topic}</span>
@@ -119,6 +152,7 @@ function FeedPost({ article, weight, sectionStart, skipState, onSkip, onUndo, on
       >
         {article.image_url && (
           <img
+            data-photo
             src={article.image_url}
             alt=""
             referrerPolicy="no-referrer"
@@ -172,6 +206,7 @@ function FeedPost({ article, weight, sectionStart, skipState, onSkip, onUndo, on
         <h3 className="font-headline text-xl font-bold leading-snug">{article.headline}</h3>
         <p className="mt-1">{article.summary}</p>
         {article.why_it_matters && <p className="mt-1 italic text-ink-muted">{article.why_it_matters}</p>}
+        <Citation article={article} onOpen={onReadOriginal} />
         {showWhy && <WhyThisStory article={article} weight={weight} />}
       </div>
     </article>

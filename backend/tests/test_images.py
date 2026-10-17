@@ -253,3 +253,56 @@ def test_wikimedia_downloads_identify_vale(monkeypatch):
     images._download_image("https://cdn.publisher.test/photo.jpg")
     assert seen["agents"][0].startswith("Vale/")
     assert seen["agents"][1].startswith("Mozilla/")
+
+
+def test_resolve_links_decodes_only_the_chosen_google_stories(monkeypatch):
+    asked = []
+
+    def decode(url):
+        asked.append(url)
+        return "https://pub.test/" + url.rsplit("/", 1)[-1]
+
+    monkeypatch.setattr(images, "decode_google_news", decode)
+    stories = [
+        {"url": "https://news.google.com/rss/articles/AAA"},
+        {"url": "https://news.google.com/rss/articles/BBB", "publisher_url": "https://known.test/b"},
+        {"url": "https://bbc.test/1"},
+    ]
+    images.resolve_links(stories)
+    assert stories[0]["publisher_url"] == "https://pub.test/AAA"
+    assert stories[1]["publisher_url"] == "https://known.test/b"
+    assert "publisher_url" not in stories[2]
+    assert asked == ["https://news.google.com/rss/articles/AAA"]
+    # Decoded once: a second paper with the same story reuses it.
+    again = [{"url": "https://news.google.com/rss/articles/AAA"}]
+    images.resolve_links(again)
+    assert again[0]["publisher_url"] == "https://pub.test/AAA" and len(asked) == 1
+
+
+def test_resolve_links_respects_its_time_budget_and_survives_errors(monkeypatch):
+    def decode(url):
+        if url.endswith("boom"):
+            raise RuntimeError("Google said no")
+        time.sleep(2)
+        return "https://late.test/x"
+
+    monkeypatch.setattr(images, "decode_google_news", decode)
+    stories = [{"url": "https://news.google.com/rss/articles/slow"}, {"url": "https://news.google.com/rss/articles/boom"}]
+    started = time.monotonic()
+    images.resolve_links(stories, budget=0.2)
+    assert time.monotonic() - started < 1.5
+    assert all("publisher_url" not in s for s in stories)
+
+
+def test_a_link_decoded_during_a_timed_out_photo_lookup_is_kept(monkeypatch):
+    monkeypatch.setattr(images, "decode_google_news", lambda url: "https://pub.test/kept")
+
+    def og(url):
+        raise RuntimeError("publisher too slow")
+
+    monkeypatch.setattr(images, "og_image", og)
+    images.find_for({"url": "https://news.google.com/rss/articles/KEEP"})
+    monkeypatch.setattr(images, "decode_google_news", lambda url: None)  # Google now refuses
+    story = {"url": "https://news.google.com/rss/articles/KEEP"}
+    images.resolve_links([story])
+    assert story["publisher_url"] == "https://pub.test/kept"

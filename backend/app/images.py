@@ -26,6 +26,8 @@ TIMEOUT = 6.0
 HEAD_BYTES = 400_000  # og:image lives in <head>; never read whole pages
 MAX_IMAGE_BYTES = 3_000_000
 BUDGET_SECONDS = 12  # total time for all stories in one edition
+LINK_BUDGET_SECONDS = 15  # decoding the chosen stories' Google News links (about 4 s each, in parallel)
+LINK_WORKERS = 20  # one per story in a paper
 CACHE_TTL = 30 * 60
 GN_BATCH_URL = "https://news.google.com/_/DotsSplashUi/data/batchexecute"
 
@@ -67,6 +69,7 @@ def post_form(url: str, body: str) -> str:
 
 
 _image_cache: dict[str, bytes] = {}
+_link_cache: dict[str, str] = {}  # Google News link -> publisher link (kept even if a photo lookup times out)
 IMAGE_CACHE_SIZE = 60
 
 
@@ -183,7 +186,7 @@ def find_for(article: dict) -> dict:
     try:
         page_url = article["url"]
         if is_google_news(page_url):
-            publisher = decode_google_news(page_url)
+            publisher = publisher_link(page_url)
             if publisher:
                 found["publisher_url"] = publisher
                 page_url = publisher
@@ -197,6 +200,41 @@ def find_for(article: dict) -> dict:
         pass  # paywall, bot block, timeout: no photo for this one
     _cache[key] = (time.monotonic(), found)
     return found
+
+
+def publisher_link(url: str) -> str | None:
+    """Cached Google News decode; None when Google won't say."""
+    if url in _link_cache:
+        return _link_cache[url]
+    publisher = decode_google_news(url)
+    if publisher:
+        _link_cache[url] = publisher
+    return publisher
+
+
+def _try_link(url: str) -> str | None:
+    try:
+        return publisher_link(url)
+    except Exception:
+        return None
+
+
+def resolve_links(articles: list[dict], budget: float = LINK_BUDGET_SECONDS) -> None:
+    """Give the chosen stories their publisher link (for citations, QR codes and Read original)."""
+    todo = [a for a in articles if not a.get("publisher_url") and is_google_news(a.get("url", ""))]
+    for a in todo:
+        if a["url"] in _link_cache:
+            a["publisher_url"] = _link_cache[a["url"]]
+    todo = [a for a in todo if not a.get("publisher_url")]
+    if not todo:
+        return
+    pool = ThreadPoolExecutor(max_workers=LINK_WORKERS)
+    futures = {pool.submit(_try_link, a["url"]): a for a in todo}
+    done, _ = wait(futures, timeout=budget)
+    for fut in done:
+        if fut.result():
+            futures[fut]["publisher_url"] = fut.result()
+    pool.shutdown(wait=False, cancel_futures=True)
 
 
 def enrich(articles: list[dict], budget: float = BUDGET_SECONDS) -> None:
@@ -220,6 +258,7 @@ def enrich(articles: list[dict], budget: float = BUDGET_SECONDS) -> None:
 def clear_cache() -> None:
     _cache.clear()
     _image_cache.clear()
+    _link_cache.clear()
 
 
 # ---------- PDF helper ----------

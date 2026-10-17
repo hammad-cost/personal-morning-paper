@@ -9,7 +9,7 @@ import os
 import threading
 from datetime import date, datetime, timezone
 
-from app import ai_editor, gatherer, images, photos, ranker, store
+from app import ai_editor, gatherer, images, logos, photos, ranker, store
 from app.store import LOCAL_USER
 
 STEPS = ["gathering", "choosing", "writing", "setting"]
@@ -123,6 +123,7 @@ def _assemble(data: dict, paper: dict, output: ai_editor.EditorOutput, writer: s
             "summary": c.summary,
             "why_it_matters": c.why_it_matters,
             "source_name": a["source_name"],
+            "source_domain": logos.source_domain(a),
             "url": a["url"],
             "published_at": a["published_at"],
             "image_url": a.get("image_url"),
@@ -173,6 +174,8 @@ def generate(data: dict, uid: str = LOCAL_USER) -> dict:
     # Short ids (a1..a10) are easier for the model to cite and match the blueprint's data model.
     for i, a in enumerate(paper["articles"], start=1):
         a["id"] = f"a{i}"
+    # Real publisher links for the stories that made the paper (the photo pass may have run out of time).
+    _attempt(lambda: images.resolve_links(paper["articles"]))
 
     _set_status(uid, step="writing")
     output, writer = ai_editor.write_edition(paper["articles"], user["bio"], weights)
@@ -247,6 +250,7 @@ def swap_story(edition_id: str, article_id: str, topic: str, uid: str = LOCAL_US
 
     others = [a["source_name"] for a in edition["articles"] if a["id"] != old["id"]]
     _attempt(lambda: images.enrich([pick]))
+    _attempt(lambda: images.resolve_links([pick]))
     out, writer = ai_editor.write_story(pick, user["bio"], weights, others)
     swapped = {"id": old["id"], "topic": topic, "source_name": pick["source_name"], "image_url": pick.get("image_url")}
     photos.ensure([swapped], {old["id"]: out.article.image_subject})
@@ -269,6 +273,7 @@ def swap_story(edition_id: str, article_id: str, topic: str, uid: str = LOCAL_US
             "image_kind": swapped["image_kind"],
             "image_source_url": swapped["image_source_url"],
             "publisher_url": pick.get("publisher_url"),
+            "source_domain": logos.source_domain(pick),
             "score": pick["score"],
             "is_lead": old.get("is_lead", False),
             "is_explore": False,

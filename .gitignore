@@ -14,6 +14,8 @@ __pycache__/
 # Backend data (commit store.example.json instead)
 backend/data/store.json
 backend/data/images/
+backend/data/logos/
+backend/data/users/
 
 # Node
 node_modules/

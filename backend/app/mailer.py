@@ -94,7 +94,7 @@ def build_message(uid: str, user: dict, edition: dict, email: str) -> dict:
         + "".join(f"- {t['text']}\n" for t in edition.get("three_takeaways", [])[:3])
         + f"\nRead it: {app_url()}\nDownload PDF ({links.PDF_LINK_DAYS} days): {download}\n\nStop daily emails: {unsubscribe}\n"
     )
-    pdf_bytes = pdf.build_pdf(edition, user.get("paper_title") or "")
+    pdf_bytes = pdf.build_pdf(edition, user.get("paper_title") or "", weights=user.get("topic_weights"), reader=user.get("name"))
     return {
         "sender": {"name": os.getenv("MAIL_FROM_NAME", "Vale").strip() or "Vale", "email": os.getenv("MAIL_FROM_EMAIL", "").strip()},
         "to": [{"email": email, "name": name}],

@@ -50,8 +50,8 @@ describe('Feed view', () => {
       'Sanctions row deepens',
     ])
     const first = posts[0]
-    expect(within(first).getByText('Reuters')).toBeInTheDocument()
-    expect(first.querySelector('img')).toHaveAttribute('src', '/api/images/a1.jpg')
+    expect(within(first).getByText('Reuters', { selector: '.font-semibold:not(cite)' })).toBeInTheDocument()
+    expect(first.querySelector('img[data-photo]')).toHaveAttribute('src', '/api/images/a1.jpg')
     expect(within(first).getByText('Photo: Reuters')).toBeInTheDocument()
     expect(within(first).getByRole('button', { name: 'More like this' })).toBeInTheDocument()
     expect(within(first).getByRole('link', { name: /read original at reuters/i })).toHaveAttribute('href', 'https://news.test/1')
@@ -82,7 +82,7 @@ describe('Feed view', () => {
   it('double-tap on the photo likes the story (LIKE signal), tapping ♡ again takes it back', async () => {
     vi.useFakeTimers()
     await openFeed()
-    const photo = post('Vulnerability backlogs grew 131%').querySelector('img').parentElement
+    const photo = post('Vulnerability backlogs grew 131%').querySelector('img[data-photo]').parentElement
     await act(async () => {
       fireEvent.click(photo)
       fireEvent.click(photo)
@@ -98,7 +98,7 @@ describe('Feed view', () => {
   it('swipe left or ✕ skips with Undo, like the broadsheet', async () => {
     vi.useFakeTimers()
     await openFeed()
-    const photo = post('Sanctions row deepens').querySelector('img').parentElement
+    const photo = post('Sanctions row deepens').querySelector('img[data-photo]').parentElement
     await act(async () => {
       fireEvent.pointerDown(photo, { clientX: 300 })
       fireEvent.pointerUp(photo, { clientX: 150 })
@@ -163,5 +163,62 @@ describe('20-story papers', () => {
     expect(screen.getByRole('heading', { name: /brain check · part 1/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /more for you · part 2/i })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /brain check · part 2/i })).toBeInTheDocument()
+  })
+})
+
+describe('Citations', () => {
+  it('every feed post cites its source, date and original link; opening it counts as a click', async () => {
+    const cited = {
+      ...edition,
+      articles: edition.articles.map((a, i) =>
+        i === 0 ? { ...a, published_at: '2026-10-16T09:30:00Z', publisher_url: 'https://www.reuters.com/technology/ai/rogue-agents-break-in/' } : a,
+      ),
+    }
+    render(<Paper profile={profile} edition={cited} />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Feed' })))
+    const first = screen.getAllByRole('article')[0]
+    expect(within(first).getByText('Reuters', { selector: 'cite' })).toBeInTheDocument()
+    expect(within(first).getByText('Oct 16, 2026')).toBeInTheDocument()
+    const link = within(first).getByRole('link', { name: /original source: reuters\.com\/technology/i })
+    expect(link).toHaveAttribute('href', 'https://www.reuters.com/technology/ai/rogue-agents-break-in/')
+    expect(link).toHaveAttribute('target', '_blank')
+    await act(async () => fireEvent.click(link))
+    expect(sendSignal).toHaveBeenCalledWith({ action: 'CLICK', edition_id: edition.id, article_id: 'a1' })
+    // Every post has one.
+    expect(screen.getAllByRole('link', { name: /^original source:/i })).toHaveLength(edition.articles.length)
+  })
+})
+
+describe('Citation links', () => {
+  it('names a Google News redirect instead of printing its code', async () => {
+    const { shortLink } = await import('./StoryCard')
+    expect(shortLink('https://news.google.com/rss/articles/CBMiowFBVV95cUxNVUFl?oc=5')).toBe('Original article (via Google News)')
+    expect(shortLink('https://www.bbc.co.uk/news/articles/c1234')).toBe('bbc.co.uk/news/articles/c1234')
+    expect(shortLink('https://example.com/' + 'x'.repeat(80))).toHaveLength(42)
+  })
+})
+
+describe('Publisher logos', () => {
+  it("uses the publisher's logo as the post's profile picture, and the initial if it fails", async () => {
+    const withSites = {
+      ...edition,
+      articles: edition.articles.map((a, i) => (i === 0 ? { ...a, source_domain: 'reuters.com' } : i === 1 ? { ...a, publisher_url: 'https://www.cyberscoop.com/x' } : a)),
+    }
+    render(<Paper profile={profile} edition={withSites} />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Feed' })))
+    const [first, second] = screen.getAllByRole('article')
+    const logo = first.querySelector('header img')
+    expect(logo).toHaveAttribute('src', '/api/logos/reuters.com')
+    expect(second.querySelector('header img')).toHaveAttribute('src', '/api/logos/cyberscoop.com')
+    await act(async () => fireEvent.error(logo))
+    expect(first.querySelector('header img')).toBeNull()
+    expect(within(first.querySelector('header')).getByText('R')).toBeInTheDocument()
+  })
+
+  it('works out the site from links, but never from a Google News redirect', async () => {
+    const { sourceDomain } = await import('./FeedView')
+    expect(sourceDomain({ source_domain: 'bbc.co.uk' })).toBe('bbc.co.uk')
+    expect(sourceDomain({ url: 'https://www.theverge.com/a' })).toBe('theverge.com')
+    expect(sourceDomain({ url: 'https://news.google.com/rss/articles/x' })).toBeNull()
   })
 })

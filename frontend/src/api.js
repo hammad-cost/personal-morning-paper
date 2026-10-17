@@ -31,3 +31,9 @@ export const resetStore = () => request('/reset', { method: 'POST' })
 export const getTodayEdition = () => request('/edition/today')
 
 export const getGenerationStatus = () => request('/generation/status')
+
+// keepalive lets a CLICK finish even while the browser is busy opening the article.
+export const sendSignal = (signal) =>
+  request('/signal', { method: 'POST', body: JSON.stringify(signal), keepalive: true })
+
+export const getBrain = () => request('/brain')

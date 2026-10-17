@@ -34,7 +34,7 @@ function App() {
   if (!state.onboarded) return <Onboarding onOnboarded={setState} />
   // Today's edition loads instantly if it exists; otherwise the press makes it once.
   if (!edition) return <PrintingPress onReady={setEdition} />
-  return <Paper profile={state.profile} edition={edition} />
+  return <Paper key={edition.id} profile={state.profile} edition={edition} />
 }
 
 export default App

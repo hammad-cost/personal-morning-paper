@@ -6,8 +6,8 @@ from fastapi import FastAPI, HTTPException
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from app import editions, gatherer, ranker, store  # noqa: E402  (env must load first)
-from app.models import OnboardRequest, StateResponse, UserProfile  # noqa: E402
+from app import editions, gatherer, learning, ranker, store  # noqa: E402  (env must load first)
+from app.models import OnboardRequest, SignalRequest, StateResponse, UserProfile  # noqa: E402
 
 app = FastAPI(title="The Personal Morning Paper")
 
@@ -71,6 +71,35 @@ def edition_today():
 def generation_status():
     """Printing Press step for the loading screen."""
     return editions.get_status()
+
+
+@app.post("/api/signal")
+def signal(body: SignalRequest):
+    """Record a reader action and update weights."""
+    result = {}
+
+    def apply(data: dict) -> None:
+        result["signal"] = learning.apply_signal(data, **body.model_dump())
+        result["topic_weights"] = data["user"]["topic_weights"]
+
+    try:
+        store.update(apply)
+    except learning.NotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except learning.SignalError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    sig = result["signal"]
+    return {
+        "applied": sig is not None,
+        "signal": {**sig, "text": learning.describe(sig)} if sig else None,
+        "topic_weights": result["topic_weights"],
+    }
+
+
+@app.get("/api/brain")
+def brain():
+    """Topic weights plus the last 10 signals in plain words."""
+    return learning.brain(store.load())
 
 
 @app.get("/api/debug/candidates")

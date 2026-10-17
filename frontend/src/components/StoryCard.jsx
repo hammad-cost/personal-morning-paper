@@ -1,9 +1,9 @@
-import { ArrowUpRight, HelpCircle, X } from 'lucide-react'
+import { ArrowUpRight, HelpCircle, Undo2, X } from 'lucide-react'
 import { useId, useState } from 'react'
 import { storyAnchor } from './ThreeTakeaways'
 
 // One story. No shadows or rounded corners: print-style rules do the separating.
-// onSkip is wired up in Step 6; without it the Skip button is disabled.
+// skipState: undefined (normal) | 'fading' (250 ms fade-out) | 'notice' ("Skipped · Undo").
 
 function WhyThisStory({ article, weight }) {
   return (
@@ -17,13 +17,44 @@ function WhyThisStory({ article, weight }) {
   )
 }
 
-function StoryCard({ article, weight, lead = false, onSkip }) {
+function SkippedNotice({ article, onUndo }) {
+  return (
+    <div
+      role="status"
+      className="my-3 flex items-center justify-between gap-3 border border-dashed border-rule px-3 py-2 font-meta text-xs text-ink-muted"
+    >
+      <span>
+        Skipped · <span className="normal-case">{article.topic}</span>
+      </span>
+      <button
+        type="button"
+        onClick={() => onUndo(article)}
+        className="flex items-center gap-1 uppercase tracking-wider text-ink underline underline-offset-4"
+      >
+        <Undo2 className="size-3.5" aria-hidden="true" /> Undo
+      </button>
+    </div>
+  )
+}
+
+function StoryCard({ article, weight, lead = false, skipState, onSkip, onUndo, onReadOriginal }) {
   const [showWhy, setShowWhy] = useState(false)
   const whyId = useId()
   const Headline = lead ? 'h2' : 'h3'
 
+  if (skipState === 'notice') return <SkippedNotice article={article} onUndo={onUndo} />
+
+  const fading = skipState === 'fading'
   return (
-    <article id={storyAnchor(article.id)} tabIndex={-1} aria-label={article.headline} className="scroll-mt-4 py-4 outline-none">
+    <article
+      id={storyAnchor(article.id)}
+      tabIndex={-1}
+      aria-label={article.headline}
+      aria-hidden={fading || undefined}
+      className={`scroll-mt-4 overflow-hidden py-4 outline-none transition-[opacity,max-height] duration-[250ms] ease-out motion-reduce:transition-none ${
+        fading ? 'max-h-0 py-0 opacity-0' : 'max-h-[80rem] opacity-100'
+      }`}
+    >
       <p className="font-meta text-[11px] uppercase tracking-widest text-ink-muted">
         {article.is_explore && <span className="mr-2 bg-accent px-1.5 py-0.5 text-paper">{article.label || 'Something new'}</span>}
         <span className={lead ? 'text-accent' : ''}>{article.topic}</span>
@@ -48,6 +79,7 @@ function StoryCard({ article, weight, lead = false, onSkip }) {
           href={article.url}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={onReadOriginal ? () => onReadOriginal(article) : undefined}
           className="flex items-center gap-1 underline underline-offset-4 hover:text-accent"
         >
           Read Original <ArrowUpRight className="size-3.5" aria-hidden="true" />
@@ -56,9 +88,9 @@ function StoryCard({ article, weight, lead = false, onSkip }) {
         <button
           type="button"
           onClick={onSkip ? () => onSkip(article) : undefined}
-          disabled={!onSkip}
-          title={onSkip ? 'Skip this story' : 'Skip arrives in Step 6'}
-          className="flex items-center gap-1 text-accent disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={!onSkip || fading}
+          title={onSkip ? 'Skip this story' : 'Skip is not available'}
+          className="flex items-center gap-1 text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-40"
         >
           Skip <X className="size-3.5" aria-hidden="true" />
         </button>

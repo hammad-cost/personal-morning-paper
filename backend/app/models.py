@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -33,6 +35,15 @@ class UserProfile(BaseModel):
     topic_weights: dict[str, int] = Field(default_factory=dict)
     source_weights: dict[str, int] = Field(default_factory=dict)
     created_at: str | None = None
+
+
+class SignalRequest(BaseModel):
+    action: Literal["CLICK", "SKIP", "UNSKIP", "QUIZ_RIGHT", "QUIZ_WRONG", "COPILOT"]
+    edition_id: str | None = None
+    article_id: str | None = None
+    topic: str | None = Field(default=None, max_length=60)  # COPILOT only
+    delta: int | None = None  # COPILOT only: +5 or -5
+    note: str = Field(default="", max_length=200)  # COPILOT: the reader's words
 
 
 class StateResponse(BaseModel):

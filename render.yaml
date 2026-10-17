@@ -1,0 +1,54 @@
+# Render blueprint for Vale's backend (Render -> New -> Blueprint -> pick this repo).
+# Secrets are marked sync: false: Render asks for them on the first deploy.
+services:
+  - type: web
+    name: vale-api
+    runtime: python
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.2
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SUPABASE_IMAGES_BUCKET
+        value: vale-images
+      - key: BREVO_API_KEY
+        sync: false
+      - key: MAIL_FROM_EMAIL
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: Vale
+      # The Vercel site, e.g. https://vale-paper.vercel.app
+      - key: PUBLIC_APP_URL
+        sync: false
+      # This service's own address, e.g. https://vale-api.onrender.com
+      - key: PUBLIC_API_URL
+        sync: false
+      # Same as PUBLIC_APP_URL (comma-separate more than one)
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: DAILY_EMAIL_HOUR
+        value: "7"
+      - key: DAILY_EMAIL_TIMEZONE
+        value: Asia/Karachi
+      - key: DAILY_EMAIL_ENABLED
+        value: "true"
+      - key: MAX_EXTRA_EDITIONS_PER_DAY
+        value: "2"
+      - key: LINK_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true

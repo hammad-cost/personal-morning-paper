@@ -1,7 +1,9 @@
 import { accessToken } from './auth/supabase'
 
-// The only place the frontend talks to the backend.
-// Vite proxies /api to http://localhost:8000 in dev.
+// The only place the frontend talks to the backend (address: see apiBase.js).
+import { API_BASE } from './apiBase'
+
+export { API_BASE, assetUrl } from './apiBase'
 
 async function authHeaders() {
   const token = await accessToken()
@@ -9,7 +11,7 @@ async function authHeaders() {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(`${API_BASE}/api${path}`, {
     ...options,
     headers: { 'Content-Type': 'application/json', ...(await authHeaders()), ...options.headers },
   })
@@ -45,7 +47,7 @@ export const listEditions = () => request('/editions')
 
 export const getEdition = (id) => request(`/edition/${encodeURIComponent(id)}`)
 
-export const pdfUrl = (id) => `/api/edition/${encodeURIComponent(id)}/pdf`
+export const pdfUrl = (id) => `${API_BASE}/api/edition/${encodeURIComponent(id)}/pdf`
 
 // Fetch the PDF with the reader's login, then hand it to the browser as a download.
 export async function downloadPdf(id) {

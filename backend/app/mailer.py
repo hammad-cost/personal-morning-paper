@@ -5,6 +5,8 @@ Settings (backend/.env):
 - MAIL_FROM_EMAIL: a sender address you verified in Brevo (Senders, Domains & Dedicated IPs)
 - MAIL_FROM_NAME: optional, defaults to "Vale"
 - PUBLIC_APP_URL: where readers open Vale, used in links (default http://localhost:5173)
+- PUBLIC_API_URL: where the API lives, for the PDF and unsubscribe links (defaults to
+  PUBLIC_APP_URL, which is right locally where Vite forwards /api)
 """
 
 import base64
@@ -31,6 +33,10 @@ def app_url() -> str:
     return os.getenv("PUBLIC_APP_URL", "http://localhost:5173").strip().rstrip("/")
 
 
+def api_url() -> str:
+    return (os.getenv("PUBLIC_API_URL", "").strip() or app_url()).rstrip("/")
+
+
 def send_via_brevo(message: dict) -> dict:
     """POST one message to Brevo. Tests replace this."""
     r = httpx.post(BREVO_URL, json=message, timeout=30,
@@ -51,8 +57,8 @@ def build_message(uid: str, user: dict, edition: dict, email: str) -> dict:
     name = user.get("name") or "reader"
     live = [a for a in edition["articles"] if not a.get("skipped")]
     lead = next((a for a in live if a.get("is_lead")), live[0] if live else None)
-    download = f"{app_url()}/api/pdf/{links.make('pdf', uid, edition['id'])}"
-    unsubscribe = f"{app_url()}/api/unsubscribe/{links.make('unsub', uid, days=links.UNSUBSCRIBE_DAYS)}"
+    download = f"{api_url()}/api/pdf/{links.make('pdf', uid, edition['id'])}"
+    unsubscribe = f"{api_url()}/api/unsubscribe/{links.make('unsub', uid, days=links.UNSUBSCRIBE_DAYS)}"
     when = _long_date(edition["date"]) if edition.get("date") else ""
 
     takeaways = "".join(

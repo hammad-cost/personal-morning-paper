@@ -5,7 +5,8 @@ from typing import Annotated
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -25,6 +26,23 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="Vale", lifespan=lifespan)
+
+
+def allowed_origins() -> list[str]:
+    """Web addresses allowed to call the API from a browser (the Vercel site once online)."""
+    import os
+
+    raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+    return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins(),
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
+    expose_headers=["Content-Disposition"],  # so the browser can read the PDF's file name
+)
 
 
 def reader(authorization: Annotated[str | None, Header()] = None) -> str:
@@ -138,10 +156,10 @@ def edition_by_id(edition_id: str, uid: Reader):
 def image(name: str):
     """A stored story picture. Public on purpose: <img> tags can't send a login, and the
     file names are content hashes that reveal nothing about any reader."""
-    path = photos.local_name(name)
-    if not path:
+    data = photos.read(name)
+    if not data:
         raise HTTPException(status_code=404, detail="Image not found.")
-    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=31536000, immutable"})
+    return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/api/logos/{domain}")

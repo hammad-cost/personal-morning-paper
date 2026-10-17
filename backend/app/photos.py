@@ -8,7 +8,8 @@ For each story, the first layer that works wins:
    stories in one section don't all share a picture.
 4. Vale illustration: drawn here with Pillow (paper, rules, topic name). It needs no network.
 
-Every image is downloaded once, resized to JPEG and stored in data/images/, then served
+Every image is downloaded once, resized to JPEG and stored in data/images/ (and in
+Supabase Storage when accounts are on, so it survives restarts online), then served
 from /api/images/<file>. That way the web page and the PDF always have it, even if the
 publisher later removes or blocks it. Labels always say what the picture is.
 """
@@ -22,7 +23,7 @@ from pathlib import Path
 
 import httpx
 
-from app import images, store
+from app import images, storage, store
 
 WIKI_API = "https://en.wikipedia.org/w/api.php"
 # Wikimedia asks API clients to identify themselves.
@@ -54,6 +55,29 @@ def local_name(name: str) -> Path | None:
     return path if path.is_file() else None
 
 
+def write(name: str, data: bytes) -> None:
+    """Keep a picture on disk, and in Supabase Storage when it's on (a failed upload only
+    means this copy is local; the story still has its picture)."""
+    (images_dir() / name).write_bytes(data)
+    if storage.enabled():
+        _attempt(lambda: storage.upload(name, data))
+
+
+def read(name: str) -> bytes | None:
+    """A stored picture by file name: from disk, else from Supabase Storage (then cached on disk)."""
+    if not NAME_RE.match(name):
+        return None
+    path = local_name(name)
+    if path:
+        return path.read_bytes()
+    if not storage.enabled():
+        return None
+    data = _attempt(lambda: storage.download(name))
+    if data:
+        (images_dir() / name).write_bytes(data)
+    return data
+
+
 def is_local(url: str | None) -> bool:
     return bool(url) and url.startswith(SERVE_PREFIX)
 
@@ -62,7 +86,7 @@ def _save_jpeg(data: bytes, name: str) -> str | None:
     jpeg = images.to_jpeg(data, max_width=1200)
     if not jpeg:
         return None
-    (images_dir() / name).write_bytes(jpeg.getvalue())
+    write(name, jpeg.getvalue())
     return name
 
 
@@ -78,8 +102,7 @@ def save_remote(url: str) -> str | None:
 def read_local(url: str) -> bytes | None:
     if not is_local(url):
         return None
-    path = local_name(url[len(SERVE_PREFIX):])
-    return path.read_bytes() if path else None
+    return read(url[len(SERVE_PREFIX):])
 
 
 def clear() -> None:
@@ -204,7 +227,7 @@ def vale_illustration(topic: str) -> str:
     d.text((w / 2, h - 100), "TODAY'S SECTION", font=font(28), fill=muted, anchor="mm")
     out = BytesIO()
     img.save(out, "JPEG", quality=85)
-    (images_dir() / name).write_bytes(out.getvalue())
+    write(name, out.getvalue())
     return name
 
 

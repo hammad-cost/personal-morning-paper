@@ -1,5 +1,6 @@
 import { ArrowUpRight, HelpCircle, Link2, Undo2, X } from 'lucide-react'
 import { useId, useState } from 'react'
+import { assetUrl } from '../apiBase'
 import { storyAnchor } from './ThreeTakeaways'
 
 // One story. No shadows or rounded corners: print-style rules do the separating.
@@ -26,7 +27,7 @@ function StoryPhoto({ article, lead }) {
     <figure className="mb-3">
       <a href={articleLink(article)} target="_blank" rel="noopener noreferrer" tabIndex={-1} aria-hidden="true">
         <img
-          src={article.image_url}
+          src={assetUrl(article.image_url)}
           alt=""
           loading={lead ? 'eager' : 'lazy'}
           referrerPolicy="no-referrer"

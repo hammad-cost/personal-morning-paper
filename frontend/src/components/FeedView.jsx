@@ -1,5 +1,6 @@
 import { ArrowUpRight, Heart, HelpCircle, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { assetUrl } from '../apiBase'
 import RecallCheck from './RecallCheck'
 import { articleLink, Citation, SkippedNotice, WhyThisStory } from './StoryCard'
 import ThreeTakeaways, { storyAnchor } from './ThreeTakeaways'
@@ -36,7 +37,7 @@ function StoryCircles({ circles, seenSections }) {
           >
             <span className={`block size-16 rounded-full p-[3px] ${seen ? 'bg-rule' : 'bg-gradient-to-tr from-accent to-sky-400'}`}>
               {c.image ? (
-                <img src={c.image} alt="" referrerPolicy="no-referrer" className="size-full rounded-full border-2 border-card object-cover" />
+                <img src={assetUrl(c.image)} alt="" referrerPolicy="no-referrer" className="size-full rounded-full border-2 border-card object-cover" />
               ) : (
                 <span className="flex size-full items-center justify-center rounded-full bg-rule font-headline text-xl font-black">
                   {c.name[0]}
@@ -75,7 +76,7 @@ function SourceAvatar({ article }) {
     <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-sky-400 p-[2px]" aria-hidden="true">
       {domain && !failed ? (
         <img
-          src={`/api/logos/${domain}`}
+          src={assetUrl(`/api/logos/${domain}`)}
           alt=""
           loading="lazy"
           onError={() => setFailed(true)}
@@ -153,7 +154,7 @@ function FeedPost({ article, weight, sectionStart, skipState, onSkip, onUndo, on
         {article.image_url && (
           <img
             data-photo
-            src={article.image_url}
+            src={assetUrl(article.image_url)}
             alt=""
             referrerPolicy="no-referrer"
             draggable={false}

@@ -53,3 +53,21 @@ describe('api', () => {
     expect(fetch.mock.calls[0][1].headers.Authorization).toBeUndefined()
   })
 })
+
+describe('API address', () => {
+  it('uses relative /api locally and points pictures at the API server online', async () => {
+    const { assetUrl, API_BASE } = await import('./apiBase')
+    expect(API_BASE).toBe('')
+    expect(assetUrl('/api/images/a.jpg')).toBe('/api/images/a.jpg')
+    expect(assetUrl('https://cdn.test/x.jpg')).toBe('https://cdn.test/x.jpg')
+    expect(assetUrl(null)).toBeNull()
+
+    vi.resetModules()
+    vi.stubEnv('VITE_API_BASE', 'https://vale-api.onrender.com/')
+    const online = await import('./apiBase')
+    expect(online.API_BASE).toBe('https://vale-api.onrender.com')
+    expect(online.assetUrl('/api/logos/bbc.co.uk')).toBe('https://vale-api.onrender.com/api/logos/bbc.co.uk')
+    vi.unstubAllEnvs()
+    vi.resetModules()
+  })
+})

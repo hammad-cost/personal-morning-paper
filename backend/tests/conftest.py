@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app import ai_editor, auth, editions, gatherer, images, logos, mailer, photos, store
+from app import ai_editor, auth, editions, gatherer, images, logos, mailer, photos, storage, store
 from app import main
 from app.main import app
 
@@ -20,7 +20,8 @@ def no_network(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     # Local mode (no sign-in, file storage) unless a test turns Supabase on itself.
     for name in ("SUPABASE_URL", "SUPABASE_SECRET_KEY", "SUPABASE_PUBLISHABLE_KEY", "BREVO_API_KEY", "MAIL_FROM_EMAIL",
-                 "CRON_SECRET", "PUBLIC_APP_URL", "DAILY_EMAIL_HOUR", "DAILY_EMAIL_TIMEZONE"):
+                 "CRON_SECRET", "PUBLIC_APP_URL", "PUBLIC_API_URL", "DAILY_EMAIL_HOUR", "DAILY_EMAIL_TIMEZONE",
+                 "SUPABASE_IMAGES_BUCKET"):
         monkeypatch.delenv(name, raising=False)
     auth.clear_cache()
     main._emails_saved.clear()
@@ -38,6 +39,9 @@ def no_network(monkeypatch):
     monkeypatch.setattr(photos, "wiki_search", blocked)
     monkeypatch.setattr(mailer, "send_via_brevo", blocked)
     monkeypatch.setattr(logos, "fetch", blocked)
+    monkeypatch.setattr(storage, "upload", blocked)
+    monkeypatch.setattr(storage, "download", blocked)
+    storage.reset()
     logos.clear_cache()
     monkeypatch.setenv("LINK_SECRET", "test-link-secret")
     images.clear_cache()

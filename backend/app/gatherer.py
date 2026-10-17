@@ -15,6 +15,8 @@ from urllib.parse import quote_plus, urlsplit, urlunsplit
 import feedparser
 import httpx
 
+from app.images import rss_image
+
 GOOGLE_NEWS_URL = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
 
 # Fallback feeds, used when Google News fails and as a pool of "new" topics for the explore slot.
@@ -113,6 +115,7 @@ def parse_feed(content: bytes, topic: str, default_source: str = "") -> list[dic
                 "source_name": source,
                 "url": url,
                 "published_at": published.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "image_url": rss_image(entry),
             }
         )
     return articles

@@ -3,10 +3,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import FileResponse
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-from app import editions, gatherer, learning, pdf, ranker, store  # noqa: E402  (env must load first)
+from app import editions, gatherer, learning, pdf, photos, ranker, store  # noqa: E402  (env must load first)
 from app.models import OnboardRequest, SignalRequest, StateResponse, SwapRequest, UserProfile  # noqa: E402
 
 app = FastAPI(title="Vale")
@@ -53,6 +54,7 @@ def onboard(body: OnboardRequest):
 def reset():
     """Dev only: clear the store for a fresh demo."""
     editions.reset_status()
+    photos.clear()
     return _state(store.reset())
 
 
@@ -90,7 +92,16 @@ def edition_by_id(edition_id: str):
     edition = editions.get_edition(store.load(), edition_id)
     if not edition:
         raise HTTPException(status_code=404, detail=f"Edition {edition_id} not found.")
-    return edition
+    return editions.with_photos(edition)
+
+
+@app.get("/api/images/{name}")
+def image(name: str):
+    """A stored story picture (news photo, Wikimedia photo or Vale illustration)."""
+    path = photos.local_name(name)
+    if not path:
+        raise HTTPException(status_code=404, detail="Image not found.")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/api/edition/{edition_id}/pdf")

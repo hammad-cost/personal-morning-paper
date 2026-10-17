@@ -18,6 +18,7 @@ EXPLORE_MAX_WEIGHT = 5  # "low or new" topics: weight 5 or less (unknown topics 
 SEEN_PENALTY = 10
 DOMAIN_PENALTY = 1
 EXPLORE_LABEL = "Something new"
+PHOTO_TIEBREAK = 0.99  # a real news photo wins only within ~1 point
 
 _BARE_DOMAIN = re.compile(r"^[a-z0-9-]+(\.[a-z0-9-]+)+$", re.IGNORECASE)
 
@@ -57,9 +58,17 @@ def score_all(candidates, topic_weights, source_weights=None, seen_urls=None, no
         for a in candidates
         if topic_weights.get(a["topic"], 0) >= 0
     ]
-    # Ties: newer first, then id for a stable order.
-    scored.sort(key=lambda a: (-a["score"], _neg_time(a["published_at"]), a["id"]))
+    scored.sort(key=_order)
     return scored
+
+
+def _with_photo(a: dict) -> float:
+    return a["score"] + (PHOTO_TIEBREAK if a.get("image_url") else 0)
+
+
+def _order(a: dict):
+    # Highest score first; near-ties go to stories with a real photo, then newer, then id.
+    return (-_with_photo(a), _neg_time(a["published_at"]), a["id"])
 
 
 def _neg_time(published_at: str) -> float:
@@ -125,7 +134,7 @@ def rank(candidates, topic_weights, source_weights=None, seen_urls=None, now=Non
 
     # The highest-scoring regular story leads (the explore story only leads if it is alone).
     regular = [a for a in picked if not a["is_explore"]] or picked
-    lead = max(regular, key=lambda a: a["score"])
+    lead = max(regular, key=_with_photo)
     lead["is_lead"] = True
 
     # Sections follow topic weight; ties broken by the section's best score.

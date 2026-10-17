@@ -8,9 +8,10 @@ import math
 import threading
 from datetime import date, datetime, timezone
 
-from app import ai_editor, gatherer, ranker, store
+from app import ai_editor, gatherer, images, photos, ranker, store
 
 STEPS = ["gathering", "choosing", "writing", "setting"]
+PHOTO_CANDIDATES = 18  # strongest candidates checked for real photos before choosing
 WORDS_PER_MINUTE = 200
 
 _generate_lock = threading.Lock()
@@ -20,6 +21,13 @@ _status = {"state": "idle", "step": None, "step_index": -1, "error": None, "edit
 
 class GenerationError(RuntimeError):
     pass
+
+
+def _attempt(fn):
+    try:
+        return fn()
+    except Exception:
+        return None
 
 
 # ---------- status ----------
@@ -81,6 +89,8 @@ def _assemble(data: dict, paper: dict, output: ai_editor.EditorOutput, writer: s
             "source_name": a["source_name"],
             "url": a["url"],
             "published_at": a["published_at"],
+            "image_url": a.get("image_url"),
+            "publisher_url": a.get("publisher_url"),
             "score": a["score"],
             "is_lead": a["is_lead"],
             "is_explore": a["is_explore"],
@@ -116,6 +126,10 @@ def generate(data: dict) -> dict:
     candidates = gatherer.gather(weights)
 
     _set_status(step="choosing")
+    # Look for real photos among the strongest candidates first, so near-ties can favour them.
+    scored = ranker.score_all(candidates, weights, user["source_weights"], seen_urls(data))
+    top = {a["id"] for a in scored[:PHOTO_CANDIDATES]}
+    _attempt(lambda: images.enrich([c for c in candidates if c["id"] in top]))
     paper = ranker.rank(candidates, weights, user["source_weights"], seen_urls(data))
     if len(paper["articles"]) < 3:
         raise GenerationError("Not enough fresh news found for your topics. Try again in a few minutes.")
@@ -127,7 +141,14 @@ def generate(data: dict) -> dict:
     output, writer = ai_editor.write_edition(paper["articles"], user["bio"], weights)
 
     _set_status(step="setting")
-    return _assemble(data, paper, output, writer)
+    edition = _assemble(data, paper, output, writer)
+    # Every story gets a stored picture: news photo, subject photo, topic photo or Vale illustration.
+    photos.ensure(
+        edition["articles"],
+        {a.id: a.image_subject for a in output.articles},
+        {s.topic: s.wikipedia_title for s in output.section_photos},
+    )
+    return edition
 
 
 def _generate_and_save() -> dict:
@@ -188,7 +209,10 @@ def swap_story(edition_id: str, article_id: str, topic: str) -> dict:
     pick = {**scored[0], "id": old["id"]}
 
     others = [a["source_name"] for a in edition["articles"] if a["id"] != old["id"]]
+    _attempt(lambda: images.enrich([pick]))
     out, writer = ai_editor.write_story(pick, user["bio"], weights, others)
+    swapped = {"id": old["id"], "topic": topic, "source_name": pick["source_name"], "image_url": pick.get("image_url")}
+    photos.ensure([swapped], {old["id"]: out.article.image_subject})
 
     def apply(d: dict) -> None:
         ed, current = _find(d, edition_id, article_id)
@@ -203,6 +227,11 @@ def swap_story(edition_id: str, article_id: str, topic: str) -> dict:
             "source_name": pick["source_name"],
             "url": pick["url"],
             "published_at": pick["published_at"],
+            "image_url": swapped["image_url"],
+            "image_credit": swapped["image_credit"],
+            "image_kind": swapped["image_kind"],
+            "image_source_url": swapped["image_source_url"],
+            "publisher_url": pick.get("publisher_url"),
             "score": pick["score"],
             "is_lead": old.get("is_lead", False),
             "is_explore": False,
@@ -259,11 +288,27 @@ def create_next() -> dict:
         return _generate_and_save()
 
 
+def with_photos(edition: dict | None) -> dict | None:
+    """Editions printed before photos existed get pictures the first time they are opened."""
+    if not edition or all(photos.is_local(a.get("image_url")) for a in edition["articles"]):
+        return edition
+    articles = [dict(a) for a in edition["articles"]]
+    photos.ensure(articles)
+
+    def apply(d: dict) -> None:
+        saved = next((e for e in d["editions"] if e["id"] == edition["id"]), None)
+        if saved:
+            saved["articles"] = articles
+
+    store.update(apply)
+    return {**edition, "articles": articles}
+
+
 def get_or_create_today() -> dict:
     """Return today's edition, generating it once if it does not exist yet."""
     existing = find_today(store.load())
     if existing:
-        return existing
+        return with_photos(existing)
     with _generate_lock:
         # Another request may have finished generating while we waited for the lock.
         existing = find_today(store.load())

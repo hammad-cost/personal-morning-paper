@@ -27,7 +27,9 @@ Write in a calm, clear newspaper style. Rules:
 - recall_quiz: 3 options each, answer_index is the 0-based index of the correct option, answerable from the summaries.
 - connect_the_dots: 1-2 sentences linking two or more stories; cite their article_ids.
 - mind_vitamin: a short, calm, practical thought for the day (not news).
-- Return every article id you were given exactly once in "articles"."""
+- Return every article id you were given exactly once in "articles".
+- image_subject: the story's main real-world subject that a photo could show (a company, person, product, place or object), 1-4 words, named as on Wikipedia, e.g. "Palo Alto Networks" or "SpaceX Starship". Use "" if there is no clear subject.
+- section_photos: for each topic in the paper, the English Wikipedia article whose photo best represents that topic as news (e.g. Space -> "Spaceflight", Cybersecurity -> "Computer security", AI Agents -> "Intelligent agent")."""
 
 
 # ---------- output schema ----------
@@ -37,6 +39,7 @@ class ArticleCopy(BaseModel):
     headline: str
     summary: str
     why_it_matters: str
+    image_subject: str = ""  # main real-world subject to find a photo of, e.g. "Palo Alto Networks"
 
 
 class Takeaway(BaseModel):
@@ -54,6 +57,11 @@ class MindVitamin(BaseModel):
     content: str
 
 
+class SectionPhoto(BaseModel):
+    topic: str
+    wikipedia_title: str  # article whose photo best represents the section, e.g. "Spaceflight"
+
+
 class QuizQuestion(BaseModel):
     question: str
     options: list[str] = Field(min_length=3, max_length=3)
@@ -67,6 +75,7 @@ class EditorOutput(BaseModel):
     connect_the_dots: ConnectTheDots
     mind_vitamin: MindVitamin
     recall_quiz: list[QuizQuestion] = Field(min_length=3, max_length=3)
+    section_photos: list[SectionPhoto] = []  # optional: helps find a good topic photo
 
 
 class InvalidOutput(ValueError):

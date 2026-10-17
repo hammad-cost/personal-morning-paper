@@ -6,9 +6,12 @@ three columns under a small running head. Headlines and takeaways link to the
 original articles. Skipped stories are left out.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date as date_cls
 from io import BytesIO
 from xml.sax.saxutils import escape
+
+from app import images, photos
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -19,6 +22,7 @@ from reportlab.platypus import (
     BaseDocTemplate,
     FrameBreak,
     Frame,
+    Image,
     KeepTogether,
     NextPageTemplate,
     PageTemplate,
@@ -55,6 +59,7 @@ STYLES = {
     "box_body": ParagraphStyle("box_body", fontName="Times-Roman", fontSize=8.5, leading=10.5, textColor=INK),
     "box_num": ParagraphStyle("box_num", fontName="Times-Bold", fontSize=20, leading=20, textColor=ACCENT, alignment=TA_CENTER),
     "side_title": ParagraphStyle("side_title", fontName="Times-Bold", fontSize=11, leading=13, textColor=INK, spaceAfter=2),
+    "credit": ParagraphStyle("credit", fontName="Helvetica", fontSize=5.5, leading=7, textColor=MUTED, spaceAfter=3),
     "footer": ParagraphStyle("footer", fontName="Helvetica", fontSize=6.5, leading=8, textColor=MUTED, alignment=TA_CENTER),
 }
 
@@ -150,7 +155,9 @@ def _later_page(c, doc, meta):
 
 # ---------- content ----------
 
-def _takeaways_box(edition: dict, urls: dict) -> Table:
+def _takeaways_box(edition: dict, urls: dict) -> Table | None:
+    if not edition.get("three_takeaways"):
+        return None
     cells = []
     for i, t in enumerate(edition.get("three_takeaways", [])[:3], start=1):
         text = _link(urls.get(t["article_id"], ""), _t(t["text"]))
@@ -178,7 +185,29 @@ def _takeaways_box(edition: dict, urls: dict) -> Table:
     return box
 
 
-def _story(a: dict, lead: bool, section: str | None = None) -> KeepTogether:
+PHOTOS_IN_PDF = 12  # every story (a paper has 10)
+
+
+def link_of(a: dict) -> str:
+    """Straight to the publisher when we know it, else the feed link."""
+    return a.get("publisher_url") or a.get("url", "")
+
+
+def _photo(data: bytes, lead: bool):
+    jpeg = images.to_jpeg(data, max_width=700)  # keeps the PDF light
+    if not jpeg:
+        return None
+    from PIL import Image as PILImage
+
+    w, h = PILImage.open(jpeg).size
+    jpeg.seek(0)
+    width = COL_W
+    height = min(width * h / w, 190 if lead else 130)
+    width = height * w / h  # keep the aspect ratio if the height was capped
+    return Image(jpeg, width=width, height=height)
+
+
+def _story(a: dict, lead: bool, section: str | None = None, photo=None) -> KeepTogether:
     # Regular stories sit under their section header, so only the lead and special stories get a kicker.
     kicker = None
     if a.get("is_explore"):
@@ -190,13 +219,15 @@ def _story(a: dict, lead: bool, section: str | None = None) -> KeepTogether:
     # A section header travels with its first story so it is never stranded at a column foot.
     parts = [Paragraph(_t(section).upper(), STYLES["section"])] if section else []
     parts += [Paragraph(kicker, STYLES["kicker"])] if kicker else []
+    if photo is not None:
+        parts += [photo, Paragraph(_t(a.get("image_credit") or f"Photo: {a.get('source_name')}"), STYLES["credit"])]
     parts += [
-        Paragraph(_link(a.get("url", ""), _t(a["headline"])), STYLES["lead" if lead else "headline"]),
+        Paragraph(_link(link_of(a), _t(a["headline"])), STYLES["lead" if lead else "headline"]),
         Paragraph(_t(a.get("summary")), STYLES["body"]),
     ]
     if a.get("why_it_matters"):
         parts.append(Paragraph(f"Why it matters to you: {_t(a['why_it_matters'])}", STYLES["why"]))
-    parts.append(Paragraph(f"{_t(a.get('source_name'))}  ·  {_link(a.get('url', ''), 'Read original')}", STYLES["source"]))
+    parts.append(Paragraph(f"{_t(a.get('source_name'))}  ·  {_link(link_of(a), 'Read original')}", STYLES["source"]))
     parts.append(Spacer(1, 9))
     return KeepTogether(parts)
 
@@ -224,10 +255,20 @@ def _side_boxes(edition: dict) -> list:
     return flow
 
 
-def build_pdf(edition: dict, paper_title: str, compress: bool = True) -> bytes:
-    """Render the edition to PDF bytes."""
+def build_pdf(edition: dict, paper_title: str, compress: bool = True, fetch_image=None) -> bytes:
+    """Render the edition to PDF bytes. fetch_image(url) -> bytes is replaceable for tests."""
+    fetch_image = fetch_image or images.fetch_image
     stories = reading_order(edition)
-    urls = {a["id"]: a.get("url", "") for a in edition["articles"]}
+    urls = {a["id"]: link_of(a) for a in edition["articles"]}
+    with_photo = [a for a in stories if a.get("image_url")][:PHOTOS_IN_PDF]
+    def load(a):
+        # Stored pictures come from disk; older editions may still point at the web.
+        if photos.is_local(a["image_url"]):
+            return photos.read_local(a["image_url"])
+        return fetch_image(a["image_url"])
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        raw = dict(zip([a["id"] for a in with_photo], pool.map(load, with_photo)))
     minutes = edition.get("reading_minutes")
     meta = {
         "title": (paper_title or BRAND).upper(),
@@ -264,13 +305,15 @@ def build_pdf(edition: dict, paper_title: str, compress: bool = True) -> bytes:
                      onPage=lambda c, d: _later_page(c, d, meta)),
     ])
 
-    flow = [NextPageTemplate("later"), _takeaways_box(edition, urls), FrameBreak()]
+    box = _takeaways_box(edition, urls)
+    flow = [NextPageTemplate("later"), *([box] if box else []), FrameBreak()]
     current_section = None
     for i, a in enumerate(stories):
         header = None
         if i > 0 and a["topic"] != current_section:
             current_section = header = a["topic"]
-        flow.append(_story(a, lead=(i == 0), section=header))
+        photo = _photo(raw[a["id"]], lead=(i == 0)) if raw.get(a["id"]) else None
+        flow.append(_story(a, lead=(i == 0), section=header, photo=photo))
     flow += _side_boxes(edition)
     flow.append(Paragraph(f"Every headline links to the original article. Printed by {BRAND}.", STYLES["footer"]))
 

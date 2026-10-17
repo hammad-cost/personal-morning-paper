@@ -17,6 +17,33 @@ function WhyThisStory({ article, weight }) {
   )
 }
 
+// News photo with a credit. Hotlinked from the publisher (no referrer sent); if it fails
+// to load, the card quietly becomes text-only.
+function StoryPhoto({ article, lead }) {
+  const [failed, setFailed] = useState(false)
+  if (!article.image_url || failed) return null
+  return (
+    <figure className="mb-3">
+      <a href={articleLink(article)} target="_blank" rel="noopener noreferrer" tabIndex={-1} aria-hidden="true">
+        <img
+          src={article.image_url}
+          alt=""
+          loading={lead ? 'eager' : 'lazy'}
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+          className={`w-full border border-rule bg-rule object-cover ${lead ? 'aspect-[16/9]' : 'aspect-[3/2]'}`}
+        />
+      </a>
+      <figcaption className="mt-1 font-meta text-[10px] uppercase tracking-wider text-ink-muted">
+        {article.image_credit || `Photo: ${article.source_name}`}
+      </figcaption>
+    </figure>
+  )
+}
+
+// Straight to the publisher when the backend decoded it, else the feed link.
+export const articleLink = (article) => article.publisher_url || article.url
+
 function SkippedNotice({ article, onUndo }) {
   return (
     <div
@@ -55,6 +82,7 @@ function StoryCard({ article, weight, lead = false, skipState, onSkip, onUndo, o
         fading ? 'max-h-0 py-0 opacity-0' : 'max-h-[80rem] opacity-100'
       }`}
     >
+      <StoryPhoto article={article} lead={lead} />
       <p className="font-meta text-[11px] uppercase tracking-widest text-ink-muted">
         {article.is_explore && <span className="mr-2 bg-accent px-1.5 py-0.5 text-paper">{article.label || 'Something new'}</span>}
         {article.swapped && <span className="mr-2 border border-ink px-1.5 py-0.5 text-ink">Editor&apos;s swap</span>}
@@ -77,7 +105,7 @@ function StoryCard({ article, weight, lead = false, skipState, onSkip, onUndo, o
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 font-meta text-xs uppercase tracking-wider">
         <a
-          href={article.url}
+          href={articleLink(article)}
           target="_blank"
           rel="noopener noreferrer"
           onClick={onReadOriginal ? () => onReadOriginal(article) : undefined}

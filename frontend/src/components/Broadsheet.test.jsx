@@ -64,6 +64,34 @@ describe('BroadsheetGrid', () => {
 })
 
 describe('StoryCard', () => {
+  it('shows the news photo with a credit, linking straight to the publisher', () => {
+    const { container } = render(
+      <StoryCard
+        article={story('a1', 'AI Agents', { image_url: 'https://cdn.test/a1.jpg', publisher_url: 'https://pub.test/a1' })}
+        lead
+      />,
+    )
+    const img = container.querySelector('img')
+    expect(img).toHaveAttribute('src', 'https://cdn.test/a1.jpg')
+    expect(img).toHaveAttribute('referrerpolicy', 'no-referrer')
+    expect(screen.getByText('Photo: Source a1')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /read original/i })).toHaveAttribute('href', 'https://pub.test/a1')
+  })
+
+  it('labels stand-in pictures honestly', () => {
+    render(<StoryCard article={story('a4', 'Space', { image_url: '/api/images/x.jpg', image_credit: 'Topic photo: Wikimedia Commons · Rover (space exploration)' })} />)
+    expect(screen.getByText('Topic photo: Wikimedia Commons · Rover (space exploration)')).toBeInTheDocument()
+  })
+
+  it('falls back to a text-only card when the photo fails or is missing', () => {
+    const { container, rerender } = render(<StoryCard article={story('a2', 'Space', { image_url: 'https://cdn.test/broken.jpg' })} />)
+    fireEvent.error(container.querySelector('img'))
+    expect(container.querySelector('img')).toBeNull()
+    expect(screen.queryByText(/photo:/i)).toBeNull()
+    rerender(<StoryCard article={story('a3', 'Space')} />)
+    expect(container.querySelector('img')).toBeNull()
+  })
+
   it('Read Original opens the publisher URL in a new tab', () => {
     render(<StoryCard article={story('a1', 'AI Agents')} />)
     const link = screen.getByRole('link', { name: /read original/i })

@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app import ai_editor, editions, gatherer, store
+from app import ai_editor, editions, gatherer, images, photos, store
 from app.main import app
 
 
@@ -24,6 +24,12 @@ def no_network(monkeypatch):
     monkeypatch.setattr(ai_editor, "call_llm", blocked)
     monkeypatch.setattr(ai_editor, "call_llm_story", blocked)
     monkeypatch.setattr(gatherer.httpx, "get", blocked)
+    monkeypatch.setattr(images, "fetch_text", blocked)
+    monkeypatch.setattr(images, "post_form", blocked)
+    monkeypatch.setattr(images, "fetch_image", lambda url: None)
+    monkeypatch.setattr(photos, "wiki_search", blocked)
+    images.clear_cache()
+    photos._topic_cache.clear()
     gatherer.clear_cache()
     editions.reset_status()
 

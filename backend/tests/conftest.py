@@ -17,6 +17,7 @@ def temp_store(tmp_path, monkeypatch):
 def no_network(monkeypatch):
     """Tests never call the real AI or the internet, even if backend/.env holds a key."""
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("MAX_EXTRA_EDITIONS_PER_DAY", raising=False)  # default limit (2) in tests
 
     def blocked(*args, **kwargs):
         raise AssertionError("real network call attempted in a test")

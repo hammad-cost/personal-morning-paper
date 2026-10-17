@@ -154,3 +154,24 @@ def test_signal_api_errors(client):
     assert missing.status_code == 404
     # Nothing was written by the failed requests.
     assert store.load()["signals"] == []
+
+
+def test_like_adds_2_and_source_1_and_unlike_takes_it_back():
+    data = make_data()
+    like = learning.apply_signal(data, "LIKE", EDITION_ID, "a2")
+    assert data["user"]["topic_weights"]["AI Agents"] == 12
+    assert data["user"]["source_weights"] == {"Reuters": 1}
+    assert article(data, "a2")["liked"] is True
+    assert learning.describe(like) == "Liked an AI Agents story · AI Agents +2 · Reuters +1"
+    assert learning.apply_signal(data, "LIKE", EDITION_ID, "a2") is None  # double-tap twice: counts once
+    learning.apply_signal(data, "UNLIKE", EDITION_ID, "a2")
+    assert data["user"]["topic_weights"]["AI Agents"] == 10
+    assert data["user"]["source_weights"] == {"Reuters": 0}
+    assert article(data, "a2")["liked"] is False
+    assert learning.apply_signal(data, "UNLIKE", EDITION_ID, "a2") is None
+
+
+def test_like_api(client):
+    store.save(make_data())
+    body = client.post("/api/signal", json={"action": "LIKE", "edition_id": EDITION_ID, "article_id": "a1"}).json()
+    assert body["applied"] is True and body["topic_weights"]["Crypto"] == 7

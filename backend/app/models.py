@@ -38,7 +38,7 @@ class UserProfile(BaseModel):
 
 
 class SignalRequest(BaseModel):
-    action: Literal["CLICK", "SKIP", "UNSKIP", "QUIZ_RIGHT", "QUIZ_WRONG", "COPILOT"]
+    action: Literal["CLICK", "LIKE", "UNLIKE", "SKIP", "UNSKIP", "QUIZ_RIGHT", "QUIZ_WRONG", "COPILOT"]
     edition_id: str | None = None
     article_id: str | None = None
     topic: str | None = Field(default=None, max_length=60)  # COPILOT only
@@ -55,3 +55,4 @@ class StateResponse(BaseModel):
     onboarded: bool
     profile: UserProfile
     today_edition_id: str | None
+    extra_editions_left: int = 0  # how many more times 'Print next edition' works today

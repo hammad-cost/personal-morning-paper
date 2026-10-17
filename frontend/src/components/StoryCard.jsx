@@ -5,7 +5,7 @@ import { storyAnchor } from './ThreeTakeaways'
 // One story. No shadows or rounded corners: print-style rules do the separating.
 // skipState: undefined (normal) | 'fading' (250 ms fade-out) | 'notice' ("Skipped · Undo").
 
-function WhyThisStory({ article, weight }) {
+export function WhyThisStory({ article, weight }) {
   return (
     <p className="mt-2 border-l-2 border-accent pl-3 font-meta text-xs leading-relaxed text-ink-muted">
       {article.is_explore
@@ -44,7 +44,7 @@ function StoryPhoto({ article, lead }) {
 // Straight to the publisher when the backend decoded it, else the feed link.
 export const articleLink = (article) => article.publisher_url || article.url
 
-function SkippedNotice({ article, onUndo }) {
+export function SkippedNotice({ article, onUndo }) {
   return (
     <div
       role="status"

@@ -2,14 +2,16 @@
 
 | Signal      | Topic delta | Other effect                                  |
 | CLICK       | +2          | source weight +1, article marked clicked      |
+| LIKE        | +2          | source weight +1, article marked liked (feed ♡) |
+| UNLIKE      | -2          | source weight -1, reverses the like           |
 | SKIP        | -3          | article marked skipped (hidden, left out of PDF) |
 | UNSKIP      | +3          | reverses the skip                             |
 | QUIZ_RIGHT  | +1          |                                               |
 | QUIZ_WRONG  | 0           | logged only                                   |
 | COPILOT     | +5 or -5    | logged with the reader's words                |
 
-Weights are clamped to [-15, 25]. Repeating a CLICK or SKIP on the same story,
-or undoing a story that is not skipped, changes nothing.
+Weights are clamped to [-15, 25]. Repeating a CLICK, LIKE or SKIP on the same story,
+or undoing a skip or like that isn't there, changes nothing.
 """
 
 from datetime import datetime, timezone
@@ -19,9 +21,9 @@ MAX_WEIGHT = 25
 COPILOT_STEP = 5
 BRAIN_SIGNALS = 10
 
-TOPIC_DELTA = {"CLICK": 2, "SKIP": -3, "UNSKIP": 3, "QUIZ_RIGHT": 1, "QUIZ_WRONG": 0}
+TOPIC_DELTA = {"CLICK": 2, "LIKE": 2, "UNLIKE": -2, "SKIP": -3, "UNSKIP": 3, "QUIZ_RIGHT": 1, "QUIZ_WRONG": 0}
 ACTIONS = set(TOPIC_DELTA) | {"COPILOT"}
-ARTICLE_ACTIONS = {"CLICK", "SKIP", "UNSKIP", "QUIZ_RIGHT", "QUIZ_WRONG"}
+ARTICLE_ACTIONS = set(TOPIC_DELTA)
 
 
 class SignalError(ValueError):
@@ -79,6 +81,10 @@ def apply_signal(data: dict, action: str, edition_id: str | None = None, article
             return None
         if action == "UNSKIP" and not article.get("skipped"):
             return None
+        if action == "LIKE" and article.get("liked"):
+            return None
+        if action == "UNLIKE" and not article.get("liked"):
+            return None
         wanted = TOPIC_DELTA[action]
     else:  # COPILOT
         topic = (topic or "").strip()
@@ -110,6 +116,12 @@ def apply_signal(data: dict, action: str, edition_id: str | None = None, article
             if source:
                 signal["source"] = source
                 signal["source_delta"] = _adjust(user["source_weights"], source, 1)
+        elif action in ("LIKE", "UNLIKE"):
+            article["liked"] = action == "LIKE"
+            source = article.get("source_name")
+            if source:
+                signal["source"] = source
+                signal["source_delta"] = _adjust(user["source_weights"], source, 1 if action == "LIKE" else -1)
         elif action == "SKIP":
             article["skipped"] = True
         elif action == "UNSKIP":
@@ -136,6 +148,8 @@ def describe(signal: dict) -> str:
         "CLICK": f"Read {_a(topic)} story",
         "SKIP": f"Skipped {_a(topic)} story",
         "UNSKIP": f"Undid a skip on {_a(topic)} story",
+        "LIKE": f"Liked {_a(topic)} story",
+        "UNLIKE": f"Took back a like on {_a(topic)} story",
         "QUIZ_RIGHT": f"Remembered a {topic} story",
         "QUIZ_WRONG": f"Missed a quiz question on {topic}",
         "COPILOT": f"Asked the Editor for {'more' if signal.get('requested', 0) > 0 else 'less'} {topic}",

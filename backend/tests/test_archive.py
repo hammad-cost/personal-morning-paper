@@ -87,3 +87,24 @@ def test_api_archive_round_trip(client, onboarded, news):
 
 def test_api_next_requires_onboarding(client):
     assert client.post("/api/edition/next").status_code == 409
+
+
+def test_print_next_stops_after_the_daily_limit(client, onboarded, news, monkeypatch):
+    monkeypatch.setenv("MAX_EXTRA_EDITIONS_PER_DAY", "2")
+    client.get("/api/edition/today")
+    assert client.get("/api/state").json()["extra_editions_left"] == 2
+    assert client.post("/api/edition/next").status_code == 200
+    assert client.post("/api/edition/next").status_code == 200
+    assert client.get("/api/state").json()["extra_editions_left"] == 0
+    blocked = client.post("/api/edition/next")
+    assert blocked.status_code == 429
+    assert blocked.json()["detail"] == "That's today's paper. See you tomorrow."
+    assert len(store.load()["editions"]) == 3
+
+
+def test_daily_limit_is_configurable(client, onboarded, news, monkeypatch):
+    monkeypatch.setenv("MAX_EXTRA_EDITIONS_PER_DAY", "0")
+    client.get("/api/edition/today")
+    assert client.post("/api/edition/next").status_code == 429
+    monkeypatch.setenv("MAX_EXTRA_EDITIONS_PER_DAY", "not a number")
+    assert editions.max_extra_per_day() == 2

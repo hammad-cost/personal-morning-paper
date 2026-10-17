@@ -6,6 +6,7 @@ import ArchiveDrawer from './ArchiveDrawer'
 import BrainPanel from './BrainPanel'
 import BroadsheetGrid, { readingOrder } from './BroadsheetGrid'
 import CaughtUp from './CaughtUp'
+import FeedView from './FeedView'
 import Masthead from './Masthead'
 import RecallCheck, { RECALL_ID } from './RecallCheck'
 import SideColumn from './SideColumn'
@@ -19,8 +20,22 @@ const EditorDesk = lazy(() => import('./EditorDesk'))
 export const FADE_MS = 250
 export const UNDO_MS = 5000
 export const SWAP_REPEAT_MS = 60_000
+export const VIEW_KEY = 'vale.view'
+export const LIMIT_MESSAGE = "That's today's paper. See you tomorrow."
 
-function Paper({ profile, edition, onPrintNext, onOpenEdition }) {
+// Feed on phones, broadsheet on wider screens, unless the reader picked one before.
+function initialView() {
+  try {
+    const saved = window.localStorage.getItem(VIEW_KEY)
+    if (saved === 'feed' || saved === 'broadsheet') return saved
+  } catch {
+    // storage blocked: fall through to the screen-size default
+  }
+  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches ? 'feed' : 'broadsheet'
+}
+
+function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft }) {
+  const [view, setView] = useState(initialView)
   const [paper, setPaper] = useState(edition)
   const [weights, setWeights] = useState(profile.topic_weights)
   const [skipStates, setSkipStates] = useState({}) // id -> 'fading' | 'notice'
@@ -83,6 +98,22 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition }) {
     signal('UNSKIP', article).catch(() => setError('Could not undo the skip.'))
   }
 
+  const changeView = (next) => {
+    setView(next)
+    try {
+      window.localStorage.setItem(VIEW_KEY, next)
+    } catch {
+      // not saved; the choice still applies now
+    }
+  }
+
+  // Feed ♡: tap again to take it back.
+  const like = (article) => {
+    const liked = !article.liked
+    patchArticle(article.id, { liked })
+    signal(liked ? 'LIKE' : 'UNLIKE', article).catch(() => patchArticle(article.id, { liked: !liked }))
+  }
+
   const readOriginal = (article) => {
     if (article.clicked) return
     patchArticle(article.id, { clicked: true })
@@ -133,7 +164,9 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition }) {
   }
 
   // The desk's tool must answer before the paper is replaced by the press.
+  const printLimitReached = extraEditionsLeft === 0
   const printNextFromDesk = () => {
+    if (printLimitReached) return LIMIT_MESSAGE
     setTimeout(onPrintNext, 1500)
     return 'Printing the next edition now with the updated weights. The Printing Press will open in a moment.'
   }
@@ -172,8 +205,11 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition }) {
           onBrain: () => setBrainOpen(true),
           onArchive: onOpenEdition ? () => setArchiveOpen(true) : undefined,
           onEditorDesk: hasCopilot() ? openDesk : undefined,
-          onPrintNext,
+          onPrintNext: printLimitReached ? undefined : onPrintNext,
         }}
+        printNote={printLimitReached ? LIMIT_MESSAGE : null}
+        view={view}
+        onViewChange={changeView}
       />
       {paper.writer === 'fallback' && (
         <p className="mt-2 text-center font-meta text-xs text-ink-muted">
@@ -186,20 +222,36 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition }) {
         </p>
       )}
 
-      <ThreeTakeaways takeaways={paper.three_takeaways} />
-
-      <main className="mt-6">
-        <BroadsheetGrid
-          articles={visible}
-          sections={paper.sections}
-          weights={weights}
-          side={<SideColumn edition={paper} />}
-          cardProps={(a) => ({ skipState: skipStates[a.id], onSkip: skip, onUndo: undo, onReadOriginal: readOriginal })}
-        />
-        <CaughtUp storyCount={articles.filter((a) => !a.skipped).length}>
-          <RecallCheck quiz={paper.recall_quiz} articles={articles} onAnswer={answerQuiz} />
-        </CaughtUp>
-      </main>
+      {view === 'feed' ? (
+        <main className="mt-4">
+          <FeedView
+            stories={readingOrder(visible, paper.sections)}
+            sections={paper.sections}
+            takeaways={paper.three_takeaways}
+            quiz={paper.recall_quiz}
+            articles={articles}
+            weights={weights}
+            cardProps={(a) => ({ skipState: skipStates[a.id], onSkip: skip, onUndo: undo, onReadOriginal: readOriginal, onLike: like })}
+            onAnswer={answerQuiz}
+          />
+        </main>
+      ) : (
+        <>
+          <ThreeTakeaways takeaways={paper.three_takeaways} />
+          <main className="mt-6">
+            <BroadsheetGrid
+              articles={visible}
+              sections={paper.sections}
+              weights={weights}
+              side={<SideColumn edition={paper} />}
+              cardProps={(a) => ({ skipState: skipStates[a.id], onSkip: skip, onUndo: undo, onReadOriginal: readOriginal })}
+            />
+            <CaughtUp storyCount={articles.filter((a) => !a.skipped).length}>
+              <RecallCheck quiz={paper.recall_quiz} articles={articles} onAnswer={answerQuiz} />
+            </CaughtUp>
+          </main>
+        </>
+      )}
 
       <footer className="mt-6 text-center font-meta text-[11px] uppercase tracking-widest text-ink-muted">
         {profile.name ? `Printed for ${profile.name} by ` : 'Printed by '}

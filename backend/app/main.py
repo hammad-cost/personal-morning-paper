@@ -20,6 +20,7 @@ def _state(data: dict) -> StateResponse:
         onboarded=profile.onboarded,
         profile=profile,
         today_edition_id=today["id"] if today else None,
+        extra_editions_left=editions.extra_editions_left(data),
     )
 
 
@@ -76,6 +77,8 @@ def edition_next():
         raise HTTPException(status_code=409, detail="Reader is not onboarded yet.")
     try:
         return editions.create_next()
+    except editions.DailyLimitReached as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except editions.GenerationError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

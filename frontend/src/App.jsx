@@ -68,6 +68,7 @@ function App() {
       edition={edition}
       onPrintNext={startNext}
       onOpenEdition={setEdition}
+      extraEditionsLeft={state.extra_editions_left}
     />
   )
 }

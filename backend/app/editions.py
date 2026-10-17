@@ -5,6 +5,7 @@ A lock makes sure two requests on the same day never create two editions.
 """
 
 import math
+import os
 import threading
 from datetime import date, datetime, timezone
 
@@ -21,6 +22,27 @@ _status = {"state": "idle", "step": None, "step_index": -1, "error": None, "edit
 
 class GenerationError(RuntimeError):
     pass
+
+
+class DailyLimitReached(RuntimeError):
+    pass
+
+
+LIMIT_MESSAGE = "That's today's paper. See you tomorrow."
+
+
+def max_extra_per_day() -> int:
+    """Extra editions allowed after the morning one (MAX_EXTRA_EDITIONS_PER_DAY, default 2)."""
+    try:
+        return max(0, int(os.getenv("MAX_EXTRA_EDITIONS_PER_DAY", "2")))
+    except ValueError:
+        return 2
+
+
+def extra_editions_left(data: dict) -> int:
+    printed_today = sum(1 for e in data["editions"] if e.get("date") == date.today().isoformat())
+    # The morning edition is free; each one after it uses up an extra.
+    return max(0, max_extra_per_day() - max(0, printed_today - 1))
 
 
 def _attempt(fn):
@@ -283,8 +305,11 @@ def get_edition(data: dict, edition_id: str) -> dict | None:
 
 
 def create_next() -> dict:
-    """Print a new edition now with the current weights, even if today's exists."""
+    """Print a new edition now with the current weights, within the daily limit."""
     with _generate_lock:
+        data = store.load()
+        if find_today(data) and extra_editions_left(data) == 0:
+            raise DailyLimitReached(LIMIT_MESSAGE)
         return _generate_and_save()
 
 

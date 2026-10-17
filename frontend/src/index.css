@@ -1,13 +1,14 @@
 @import "tailwindcss";
 
-/* Design tokens from BLUEPRINT.md "Design system". */
+/* Ink & Blue: cool grey page, white cards, slate ink, one deep blue accent. */
 :root {
-  --bg-paper: #faf7f2;
-  --bg-card: #fffdf9;
-  --ink: #1a1917;
-  --ink-muted: #5c5852;
-  --rule: #d6d1c7;
-  --accent: #b93829;
+  --bg-paper: #f3f5f8;
+  --bg-card: #ffffff;
+  --ink: #1e293b;
+  --ink-muted: #64748b;
+  --rule: #e2e8f0;
+  --accent: #1d4ed8;
+  --accent-soft: #dbeafe;
 }
 
 /* Expose the tokens as Tailwind utilities: bg-paper, text-ink, border-rule, font-headline... */
@@ -18,16 +19,18 @@
   --color-ink-muted: var(--ink-muted);
   --color-rule: var(--rule);
   --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
 }
 
 /* Plain @theme (not inline) so the font variables also exist at runtime for var(). */
 @theme {
-  --font-headline: "Playfair Display", Georgia, "Times New Roman", serif;
+  /* Readable on screens: a sturdy text serif for headlines, Inter for everything else. */
+  --font-headline: "Source Serif 4", Georgia, "Times New Roman", serif;
   --font-body: "Inter", system-ui, sans-serif;
-  --font-meta: "JetBrains Mono", ui-monospace, monospace;
+  --font-meta: "Inter", system-ui, sans-serif;
 }
 
-/* Re-skin the CopilotKit v2 chat as a broadsheet: paper, ink, square corners. */
+/* Re-skin the CopilotKit v2 chat in Vale's colours. */
 [data-copilotkit] {
   --background: var(--bg-card);
   --foreground: var(--ink);
@@ -35,8 +38,8 @@
   --card-foreground: var(--ink);
   --popover: var(--bg-card);
   --popover-foreground: var(--ink);
-  --primary: var(--ink);
-  --primary-foreground: var(--bg-paper);
+  --primary: var(--accent);
+  --primary-foreground: #ffffff;
   --secondary: var(--bg-paper);
   --secondary-foreground: var(--ink);
   --muted: var(--bg-paper);
@@ -46,7 +49,7 @@
   --border: var(--rule);
   --input: var(--rule);
   --ring: var(--accent);
-  --radius: 0;
+  --radius: 0.75rem;
   --cpk-default-font-family: var(--font-body);
 }
 
@@ -59,7 +62,9 @@
     background: var(--bg-paper);
     color: var(--ink);
     font-family: var(--font-body);
+    font-size: 16px;
     line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
   }
 
   :focus-visible {

@@ -27,11 +27,11 @@ function Question({ q, index, answer, onPick }) {
               disabled={answered}
               aria-pressed={picked}
               onClick={() => onPick(i)}
-              className={`flex items-center justify-between gap-2 border px-3 py-2 text-left text-sm ${
+              className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left text-sm ${
                 {
-                  open: 'border-ink hover:bg-ink hover:text-paper',
-                  right: 'border-ink bg-ink text-paper',
-                  wrong: 'border-accent text-accent line-through',
+                  open: 'border-rule bg-card hover:border-accent hover:bg-accent-soft',
+                  right: 'border-accent bg-accent text-white',
+                  wrong: 'border-red-300 bg-red-50 text-red-700 line-through',
                   muted: 'border-rule text-ink-muted',
                 }[state]
               }`}
@@ -48,7 +48,7 @@ function Question({ q, index, answer, onPick }) {
           {answer === q.answer_index ? (
             <span>Right. </span>
           ) : (
-            <span className="text-accent">Not quite: it was “{q.options[q.answer_index]}”. </span>
+            <span className="text-red-700">Not quite: it was “{q.options[q.answer_index]}”. </span>
           )}
           <a
             href={`#${storyAnchor(q.article_id)}`}

@@ -8,7 +8,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8000',
+      // API_PROXY lets a second dev copy talk to another backend.
+      '/api': process.env.API_PROXY || 'http://localhost:8000',
     },
   },
   test: {

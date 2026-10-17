@@ -59,11 +59,11 @@ describe('Feed view', () => {
     expect(screen.queryByText(/\d+ likes?/i)).toBeNull()
   })
 
-  it('has story circles for 3 Things and each section that jump to them', async () => {
+  it('has story circles for each section that jump to them', async () => {
     await openFeed()
     const circles = within(screen.getByRole('navigation', { name: 'Sections' })).getAllByRole('button')
-    expect(circles.map((c) => c.textContent)).toEqual(['3 Things', 'AI Agents', 'Cybersecurity', 'World News'])
-    fireEvent.click(circles[2])
+    expect(circles.map((c) => c.textContent)).toEqual(['AI Agents', 'Cybersecurity', 'World News'])
+    fireEvent.click(circles[1])
     expect(Element.prototype.scrollIntoView.mock.contexts.at(-1)).toBe(document.getElementById('feed-section-cybersecurity'))
   })
 

@@ -40,10 +40,10 @@ function BroadsheetGrid({ articles, sections, weights = {}, side, cardProps = ()
     <div>
       {!noLead && (
       <div className="grid border-b-2 border-ink lg:grid-cols-12">
-        <div className="lg:col-span-8 lg:border-r lg:border-rule lg:pr-6">
+        <div className={side ? 'lg:col-span-8 lg:border-r lg:border-rule lg:pr-6' : 'lg:col-span-12 lg:mx-auto lg:w-full lg:max-w-4xl'}>
           {lead && <StoryCard article={lead} weight={weights[lead.topic]} lead {...cardProps(lead)} />}
         </div>
-        <div className="border-t border-rule lg:col-span-4 lg:border-t-0 lg:pl-6">{side}</div>
+        {side && <div className="border-t border-rule lg:col-span-4 lg:border-t-0 lg:pl-6">{side}</div>}
       </div>
       )}
 

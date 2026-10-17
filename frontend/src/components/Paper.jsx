@@ -1,7 +1,9 @@
+import { Archive, Brain, Download, Home, LogOut, Mail, MessagesSquare, Printer, UserRound } from 'lucide-react'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { downloadPdf, emailEdition, sendSignal, swapStory, updateSettings } from '../api'
 import { BRAND } from '../brand'
 import { hasCopilot } from '../copilot/config'
+import AppShell from './AppShell'
 import ArchiveDrawer from './ArchiveDrawer'
 import BrainPanel from './BrainPanel'
 import BroadsheetGrid, { readingOrder } from './BroadsheetGrid'
@@ -9,13 +11,14 @@ import CaughtUp from './CaughtUp'
 import FeedView from './FeedView'
 import Masthead from './Masthead'
 import RecallCheck, { RECALL_ID } from './RecallCheck'
-import SideColumn from './SideColumn'
 import ThreeTakeaways from './ThreeTakeaways'
+import YouPage from './YouPage'
 
 // CopilotKit is large; the Editor Desk loads the first time it is opened.
 const EditorDesk = lazy(() => import('./EditorDesk'))
 
-// The broadsheet reading page for one edition, plus the learning signals it sends.
+// The reading page for one edition (feed or broadsheet) inside the app shell, plus the
+// learning signals it sends.
 
 export const FADE_MS = 250
 export const UNDO_MS = 5000
@@ -23,19 +26,20 @@ export const SWAP_REPEAT_MS = 60_000
 export const VIEW_KEY = 'vale.view'
 export const LIMIT_MESSAGE = "That's today's paper. See you tomorrow."
 
-// Feed on phones, broadsheet on wider screens, unless the reader picked one before.
+// The feed is home, unless the reader picked the broadsheet before.
 function initialView() {
   try {
     const saved = window.localStorage.getItem(VIEW_KEY)
     if (saved === 'feed' || saved === 'broadsheet') return saved
   } catch {
-    // storage blocked: fall through to the screen-size default
+    // storage blocked: use the default
   }
-  return typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 767px)').matches ? 'feed' : 'broadsheet'
+  return 'feed'
 }
 
 function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft, account = null, emailReady = false }) {
   const [view, setView] = useState(initialView)
+  const [page, setPage] = useState('paper') // paper | you
   const [paper, setPaper] = useState(edition)
   const [weights, setWeights] = useState(profile.topic_weights)
   const [skipStates, setSkipStates] = useState({}) // id -> 'fading' | 'notice'
@@ -47,6 +51,7 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
   const [dailyEmail, setDailyEmail] = useState(profile.daily_email !== false)
+  const [quizResults, setQuizResults] = useState({}) // article id -> answered right?
   const timers = useRef({})
   const paperRef = useRef(paper)
   paperRef.current = paper
@@ -148,6 +153,7 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
   }
 
   const answerQuiz = (question, correct) => {
+    setQuizResults((prev) => ({ ...prev, [question.article_id]: correct }))
     sendSignal({ action: correct ? 'QUIZ_RIGHT' : 'QUIZ_WRONG', edition_id: paper.id, article_id: question.article_id })
       .then(learned)
       .catch(() => {})
@@ -227,23 +233,59 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
     is_explore: a.is_explore,
   }))
 
+  const actions = {
+    onDownload: () => downloadPdf(paper.id).catch((e) => setError(e.message)),
+    onSignOut: account?.signOut,
+    onEmail: account && emailReady && !emailing ? emailPaper : undefined,
+    onArchive: onOpenEdition ? () => setArchiveOpen(true) : undefined,
+    onPrintNext: printLimitReached ? undefined : onPrintNext,
+  }
+  const openPage = (next) => {
+    setPage(next)
+    try {
+      window.scrollTo({ top: 0 })
+    } catch {
+      // not available (tests)
+    }
+  }
+  const navItems = [
+    { key: 'home', label: 'Home', icon: Home, onClick: () => openPage('paper'), active: page === 'paper' },
+    { key: 'archive', label: 'Past Editions', icon: Archive, onClick: actions.onArchive, note: 'Past editions are not available here' },
+    { key: 'editor', label: 'Editor Desk', icon: MessagesSquare, onClick: hasCopilot() ? openDesk : undefined, active: deskOpen, note: 'The Editor Desk needs a CopilotKit key' },
+    { key: 'brain', label: 'Brain', icon: Brain, onClick: () => setBrainOpen(true), active: brainOpen },
+    { key: 'pdf', label: 'Download PDF', icon: Download, onClick: actions.onDownload, desktopOnly: true },
+    ...(actions.onEmail ? [{ key: 'email', label: 'Email me this paper', icon: Mail, onClick: actions.onEmail, desktopOnly: true }] : []),
+    { key: 'print', label: 'Print next edition', icon: Printer, onClick: actions.onPrintNext, note: printLimitReached ? LIMIT_MESSAGE : null, desktopOnly: true },
+    { key: 'you', label: 'You', icon: UserRound, onClick: () => openPage('you'), active: page === 'you' },
+    ...(actions.onSignOut ? [{ key: 'signout', label: 'Sign out', icon: LogOut, onClick: actions.onSignOut, desktopOnly: true }] : []),
+  ]
+  const editionLine = `No. ${paper.edition_number} · ${paper.reading_minutes ?? ''} min`
+
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 sm:py-8">
+    <AppShell
+      items={navItems}
+      note={printLimitReached ? LIMIT_MESSAGE : null}
+      topBar={<span className="truncate text-xs text-ink-muted">{editionLine}</span>}
+      aside={page === 'paper' && view === 'feed' ? <TodayCard profile={profile} paper={paper} /> : null}
+    >
+    {page === 'you' ? (
+      <YouPage
+        profile={profile}
+        account={account}
+        paper={paper}
+        weights={weights}
+        dailyEmail={dailyEmail}
+        onDailyEmail={account && emailReady ? toggleDailyEmail : undefined}
+        actions={actions}
+        printNote={printLimitReached ? LIMIT_MESSAGE : null}
+      />
+    ) : (
+    <div className={`mx-auto px-4 py-6 sm:py-8 ${view === 'feed' ? 'max-w-2xl' : 'max-w-7xl'}`}>
       <Masthead
         title={profile.paper_title}
         date={new Date(`${paper.date}T12:00:00`)}
         edition={paper.edition_number}
         readingMinutes={paper.reading_minutes}
-        tools={{
-          onDownload: () => downloadPdf(paper.id).catch((e) => setError(e.message)),
-          onSignOut: account?.signOut,
-          onEmail: account && emailReady && !emailing ? emailPaper : undefined,
-          onBrain: () => setBrainOpen(true),
-          onArchive: onOpenEdition ? () => setArchiveOpen(true) : undefined,
-          onEditorDesk: hasCopilot() ? openDesk : undefined,
-          onPrintNext: printLimitReached ? undefined : onPrintNext,
-        }}
-        printNote={printLimitReached ? LIMIT_MESSAGE : null}
         view={view}
         onViewChange={changeView}
       />
@@ -274,17 +316,16 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
             weights={weights}
             cardProps={(a) => ({ skipState: skipStates[a.id], onSkip: skip, onUndo: undo, onReadOriginal: readOriginal, onLike: like })}
             onAnswer={answerQuiz}
+            quizResults={quizResults}
           />
         </main>
       ) : (
         <>
-          <ThreeTakeaways takeaways={paper.three_takeaways} />
           <main className="mt-6">
             <BroadsheetGrid
               articles={visible.filter((a) => (a.part ?? 1) === 1)}
               sections={paper.sections}
               weights={weights}
-              side={<SideColumn edition={paper} />}
               cardProps={(a) => ({ skipState: skipStates[a.id], onSkip: skip, onUndo: undo, onReadOriginal: readOriginal })}
             />
             {hasPartTwo ? (
@@ -315,6 +356,7 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
                 onAnswer={answerQuiz}
                 {...(hasPartTwo ? { title: '🧠 Brain check · Part 2', subtitle: "Last three questions. Then you're done for today." } : {})}
               />
+              <ThreeTakeaways takeaways={paper.three_takeaways} articles={articles} results={quizResults} />
             </CaughtUp>
           </main>
         </>
@@ -331,6 +373,8 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
         {profile.name ? `Printed for ${profile.name} by ` : 'Printed by '}
         <span className="font-headline text-sm font-black normal-case tracking-normal text-ink">{BRAND}</span>
       </footer>
+    </div>
+    )}
 
       <BrainPanel open={brainOpen} onClose={closeBrain} refreshKey={brainVersion} />
       {onOpenEdition && (
@@ -357,6 +401,24 @@ function Paper({ profile, edition, onPrintNext, onOpenEdition, extraEditionsLeft
           />
         </Suspense>
       )}
+    </AppShell>
+  )
+}
+
+// Right column beside the feed on wide screens: the paper card and the editor's extras.
+function TodayCard({ profile, paper }) {
+  const parts = paper.articles.some((a) => a.part === 2) ? 2 : 1
+  return (
+    <div className="space-y-4">
+      <section className="rounded-2xl border border-rule bg-card p-5">
+        <p className="text-xs font-semibold uppercase tracking-widest text-accent">Today&apos;s paper</p>
+        <p className="mt-1 font-headline text-xl font-black leading-tight">{profile.paper_title}</p>
+        <p className="mt-2 text-sm text-ink-muted">
+          {paper.articles.length} stories · {parts} brain check{parts > 1 ? 's' : ''} · {paper.reading_minutes} min
+        </p>
+        <p className="mt-3 text-sm">Read it to the end, answer the brain checks, and see the 3 things you learned.</p>
+      </section>
+      <p className="px-1 text-xs text-ink-muted">{BRAND} · One calm paper a day</p>
     </div>
   )
 }

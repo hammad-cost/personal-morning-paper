@@ -1,6 +1,6 @@
 import { Mail } from 'lucide-react'
 import { useState } from 'react'
-import { BRAND, TAGLINE } from '../brand'
+import Splash from '../components/Splash'
 import { googleEnabled, supabase } from './supabase'
 
 // Sign in with a one-time email link (and Google, when it is switched on in Supabase).
@@ -33,16 +33,11 @@ function SignIn({ client = supabase }) {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center px-4 text-center">
-      <p className="font-headline text-4xl font-black tracking-tight">{BRAND}</p>
-      <p className="font-meta text-xs uppercase tracking-widest text-ink-muted">{TAGLINE}</p>
-      <h1 className="mt-6 w-full border-y-4 border-double border-ink py-5 font-headline text-3xl font-black">
-        Sign in to your paper
-      </h1>
+    <Splash title="Sign in to your paper" intro="Your own morning paper: finite, calm, and getting smarter with every story you read or skip.">
 
       {state === 'sent' ? (
-        <div role="status" className="mt-6 border border-ink bg-card p-5 text-left">
-          <Mail className="size-6" aria-hidden="true" />
+        <div role="status" className="rounded-2xl border border-rule bg-card p-5 text-left shadow-sm">
+          <Mail className="size-6 text-accent" aria-hidden="true" />
           <p className="mt-2 font-headline text-xl font-bold">Check your inbox</p>
           <p className="mt-1 text-sm text-ink-muted">
             We sent a sign-in link to <strong className="text-ink">{email.trim()}</strong>. Open it on this device to read your paper.
@@ -52,8 +47,8 @@ function SignIn({ client = supabase }) {
           </button>
         </div>
       ) : (
-        <form onSubmit={sendLink} className="mt-6 flex w-full flex-col gap-3 text-left" aria-label="Sign in">
-          <label className="flex flex-col gap-1 text-sm">
+        <form onSubmit={sendLink} className="flex w-full flex-col gap-3 rounded-2xl border border-rule bg-card p-5 text-left shadow-sm" aria-label="Sign in">
+          <label className="flex flex-col gap-1 text-sm font-medium">
             Email
             <input
               type="email"
@@ -62,14 +57,14 @@ function SignIn({ client = supabase }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@university.edu"
-              className="border border-rule bg-card px-3 py-2"
+              className="rounded-xl border border-rule bg-paper px-3 py-2.5 font-normal focus:border-accent"
             />
           </label>
-          <button type="submit" disabled={state === 'sending'} className="bg-ink px-5 py-2.5 font-medium text-paper disabled:opacity-50">
+          <button type="submit" disabled={state === 'sending'} className="rounded-xl bg-accent px-5 py-3 font-semibold text-white hover:bg-blue-800 disabled:opacity-50">
             {state === 'sending' ? 'Sending…' : 'Email me a sign-in link'}
           </button>
           {googleEnabled() && (
-            <button type="button" onClick={google} className="border border-ink px-5 py-2.5 font-medium hover:bg-ink hover:text-paper">
+            <button type="button" onClick={google} className="rounded-xl border border-rule px-5 py-3 font-semibold hover:border-accent">
               Continue with Google
             </button>
           )}
@@ -78,11 +73,11 @@ function SignIn({ client = supabase }) {
       )}
 
       {error && (
-        <p role="alert" className="mt-3 text-sm text-accent">
+        <p role="alert" className="mt-3 text-sm text-red-700">
           {error}
         </p>
       )}
-    </main>
+    </Splash>
   )
 }
 

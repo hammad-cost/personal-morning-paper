@@ -151,14 +151,15 @@ describe('ThreeTakeaways', () => {
 describe('Paper', () => {
   const profile = { paper_title: 'THE AYESHA CHRONICLE', topic_weights: { 'AI Agents': 10 } }
 
-  it('lays out masthead, takeaways, side column and the caught-up ending', async () => {
+  it('lays out masthead, stories, then the caught-up ending with 3 Things last', async () => {
     render(<Paper profile={profile} edition={sampleEdition} />)
     expect(screen.getByRole('heading', { level: 1, name: 'THE AYESHA CHRONICLE' })).toBeInTheDocument()
     expect(screen.getByText(/edition no\. 1/i)).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: /3 things you learned today/i })).toBeInTheDocument()
-    const side = screen.getByRole('complementary', { name: 'Side column' })
-    expect(within(side).getByText('Both stories are about trust in automation.')).toBeInTheDocument()
-    expect(within(side).getByRole('heading', { name: 'Read slowly' })).toBeInTheDocument()
+    // 3 Things lives inside the ending, not at the top; no Connect the Dots / Vitamin.
+    const end = screen.getByRole('region', { name: 'End of paper' })
+    expect(within(end).getByRole('region', { name: /3 things you learned today/i })).toBeInTheDocument()
+    expect(screen.queryByText('Both stories are about trust in automation.')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Read slowly' })).toBeNull()
     expect(screen.getByRole('heading', { name: /you're all caught up/i })).toBeInTheDocument()
     // Download PDF fetches the edition's PDF (with the reader's login when signed in).
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, headers: new Headers(), blob: () => Promise.resolve(new Blob(['%PDF'])) })

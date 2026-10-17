@@ -32,6 +32,12 @@ export const getTodayEdition = () => request('/edition/today')
 
 export const getGenerationStatus = () => request('/generation/status')
 
+export const printNextEdition = () => request('/edition/next', { method: 'POST' })
+
+export const listEditions = () => request('/editions')
+
+export const getEdition = (id) => request(`/edition/${encodeURIComponent(id)}`)
+
 // keepalive lets a CLICK finish even while the browser is busy opening the article.
 export const sendSignal = (signal) =>
   request('/signal', { method: 'POST', body: JSON.stringify(signal), keepalive: true })

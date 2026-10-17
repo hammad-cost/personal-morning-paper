@@ -231,6 +231,34 @@ def swap_story(edition_id: str, article_id: str, topic: str) -> dict:
     return result["edition"]
 
 
+def list_editions(data: dict) -> list[dict]:
+    """Archive rows, newest first."""
+    rows = []
+    for e in sorted(data["editions"], key=lambda e: e.get("edition_number", 0), reverse=True):
+        lead = next((a for a in e["articles"] if a.get("is_lead")), e["articles"][0] if e["articles"] else None)
+        rows.append({
+            "id": e["id"],
+            "edition_number": e.get("edition_number"),
+            "date": e.get("date"),
+            "created_at": e.get("created_at"),
+            "reading_minutes": e.get("reading_minutes"),
+            "writer": e.get("writer"),
+            "lead_headline": lead["headline"] if lead else None,
+            "sections": e.get("sections", []),
+        })
+    return rows
+
+
+def get_edition(data: dict, edition_id: str) -> dict | None:
+    return next((e for e in data["editions"] if e["id"] == edition_id), None)
+
+
+def create_next() -> dict:
+    """Print a new edition now with the current weights, even if today's exists."""
+    with _generate_lock:
+        return _generate_and_save()
+
+
 def get_or_create_today() -> dict:
     """Return today's edition, generating it once if it does not exist yet."""
     existing = find_today(store.load())

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { getState } from './api'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { getState, printNextEdition } from './api'
 import Onboarding from './components/Onboarding'
 import Paper from './components/Paper'
 import PrintingPress from './components/PrintingPress'
@@ -7,10 +7,36 @@ import PrintingPress from './components/PrintingPress'
 function App() {
   const [state, setState] = useState(null)
   const [edition, setEdition] = useState(null)
+  const [printingNext, setPrintingNext] = useState(false)
   const [error, setError] = useState(null)
+  // One request per "Print next edition", even if the press effect runs twice (React StrictMode).
+  const nextRequest = useRef(null)
 
   useEffect(() => {
     getState().then(setState).catch(setError)
+  }, [])
+
+  const loadNext = useCallback(() => {
+    if (!nextRequest.current) {
+      nextRequest.current = printNextEdition().catch((e) => {
+        nextRequest.current = null // let "Try again" make a fresh request
+        throw e
+      })
+    }
+    return nextRequest.current
+  }, [])
+
+  const startNext = useCallback(() => {
+    nextRequest.current = null
+    setPrintingNext(true)
+  }, [])
+
+  const finishNext = useCallback((next) => {
+    nextRequest.current = null
+    setPrintingNext(false)
+    setEdition(next)
+    // Weights changed since the last paper; refresh the profile the new paper reads.
+    getState().then(setState).catch(() => {})
   }, [])
 
   if (error) {
@@ -32,9 +58,18 @@ function App() {
   }
 
   if (!state.onboarded) return <Onboarding onOnboarded={setState} />
+  if (printingNext) return <PrintingPress load={loadNext} onReady={finishNext} title="Printing your next edition" />
   // Today's edition loads instantly if it exists; otherwise the press makes it once.
   if (!edition) return <PrintingPress onReady={setEdition} />
-  return <Paper key={edition.id} profile={state.profile} edition={edition} />
+  return (
+    <Paper
+      key={edition.id}
+      profile={state.profile}
+      edition={edition}
+      onPrintNext={startNext}
+      onOpenEdition={setEdition}
+    />
+  )
 }
 
 export default App

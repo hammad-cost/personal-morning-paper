@@ -11,12 +11,15 @@ export const PRESS_STEPS = [
   { key: 'setting', label: 'Setting the type' },
 ]
 
-function PrintingPress({ onReady, pollMs = 700 }) {
+// load: what to print. Defaults to today's edition; Step 8 passes printNextEdition.
+function PrintingPress({ onReady, load = getTodayEdition, title = 'Your paper is on the press', pollMs = 700 }) {
   const [stepIndex, setStepIndex] = useState(-1)
   const [error, setError] = useState(null)
   const [attempt, setAttempt] = useState(0)
   const onReadyRef = useRef(onReady)
   onReadyRef.current = onReady
+  const loadRef = useRef(load)
+  loadRef.current = load
 
   useEffect(() => {
     let alive = true
@@ -32,7 +35,7 @@ function PrintingPress({ onReady, pollMs = 700 }) {
       }
     }, pollMs)
 
-    getTodayEdition()
+    loadRef.current()
       .then((edition) => alive && onReadyRef.current(edition))
       .catch((e) => alive && setError(e.message))
       .finally(() => clearInterval(timer))
@@ -47,7 +50,7 @@ function PrintingPress({ onReady, pollMs = 700 }) {
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4">
       <p className="text-center font-meta text-xs uppercase tracking-widest text-ink-muted">The Printing Press</p>
       <h1 className="mt-2 border-y-4 border-double border-ink py-4 text-center font-headline text-3xl font-black">
-        Your paper is on the press
+        {title}
       </h1>
       <ol className="mt-8 flex flex-col gap-3" aria-label="Printing progress">
         {PRESS_STEPS.map((step, i) => {

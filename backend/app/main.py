@@ -67,6 +67,32 @@ def edition_today():
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+@app.post("/api/edition/next")
+def edition_next():
+    """Print a new edition now using the updated weights (learning demo and archive)."""
+    if not store.load()["user"]["onboarded"]:
+        raise HTTPException(status_code=409, detail="Reader is not onboarded yet.")
+    try:
+        return editions.create_next()
+    except editions.GenerationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/editions")
+def editions_list():
+    """Past editions, newest first: id, number, date, lead headline."""
+    return editions.list_editions(store.load())
+
+
+@app.get("/api/edition/{edition_id}")
+def edition_by_id(edition_id: str):
+    """One full edition."""
+    edition = editions.get_edition(store.load(), edition_id)
+    if not edition:
+        raise HTTPException(status_code=404, detail=f"Edition {edition_id} not found.")
+    return edition
+
+
 @app.post("/api/edition/{edition_id}/swap")
 def swap(edition_id: str, body: SwapRequest):
     """Editor Desk: replace one story with a fresh one on a requested topic."""

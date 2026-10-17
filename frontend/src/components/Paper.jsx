@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { sendSignal, swapStory } from '../api'
 import { hasCopilot } from '../copilot/config'
+import ArchiveDrawer from './ArchiveDrawer'
 import BrainPanel from './BrainPanel'
 import BroadsheetGrid, { readingOrder } from './BroadsheetGrid'
 import CaughtUp from './CaughtUp'
@@ -17,12 +18,13 @@ export const FADE_MS = 250
 export const UNDO_MS = 5000
 export const SWAP_REPEAT_MS = 60_000
 
-function Paper({ profile, edition }) {
+function Paper({ profile, edition, onPrintNext, onOpenEdition }) {
   const [paper, setPaper] = useState(edition)
   const [weights, setWeights] = useState(profile.topic_weights)
   const [skipStates, setSkipStates] = useState({}) // id -> 'fading' | 'notice'
   const [brainOpen, setBrainOpen] = useState(false)
   const [brainVersion, setBrainVersion] = useState(0)
+  const [archiveOpen, setArchiveOpen] = useState(false)
   const [deskOpen, setDeskOpen] = useState(false)
   const [deskLoaded, setDeskLoaded] = useState(false)
   const [error, setError] = useState(null)
@@ -113,7 +115,14 @@ function Paper({ profile, edition }) {
     }
   }
 
+  // The desk's tool must answer before the paper is replaced by the press.
+  const printNextFromDesk = () => {
+    setTimeout(onPrintNext, 1500)
+    return 'Printing the next edition now with the updated weights. The Printing Press will open in a moment.'
+  }
+
   const closeBrain = useCallback(() => setBrainOpen(false), [])
+  const closeArchive = useCallback(() => setArchiveOpen(false), [])
   const openDesk = () => {
     setDeskLoaded(true)
     setDeskOpen((v) => !v)
@@ -141,7 +150,12 @@ function Paper({ profile, edition }) {
         date={new Date(`${paper.date}T12:00:00`)}
         edition={paper.edition_number}
         readingMinutes={paper.reading_minutes}
-        tools={{ onBrain: () => setBrainOpen(true), onEditorDesk: hasCopilot() ? openDesk : undefined }}
+        tools={{
+          onBrain: () => setBrainOpen(true),
+          onArchive: onOpenEdition ? () => setArchiveOpen(true) : undefined,
+          onEditorDesk: hasCopilot() ? openDesk : undefined,
+          onPrintNext,
+        }}
       />
       {paper.writer === 'fallback' && (
         <p className="mt-2 text-center font-meta text-xs text-ink-muted">
@@ -168,6 +182,15 @@ function Paper({ profile, edition }) {
       </main>
 
       <BrainPanel open={brainOpen} onClose={closeBrain} refreshKey={brainVersion} />
+      {onOpenEdition && (
+        <ArchiveDrawer
+          open={archiveOpen}
+          onClose={closeArchive}
+          currentId={paper.id}
+          onOpen={onOpenEdition}
+          onPrintNext={onPrintNext}
+        />
+      )}
       {deskLoaded && (
         <Suspense fallback={null}>
           <EditorDesk
@@ -178,6 +201,7 @@ function Paper({ profile, edition }) {
             edition={paper}
             onAdjust={adjustInterest}
             onSwap={swap}
+            onPrintNext={onPrintNext ? printNextFromDesk : undefined}
           />
         </Suspense>
       )}
